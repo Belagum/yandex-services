@@ -3,10 +3,13 @@ from app_utils.storage import JsonStore
 from app_utils.utils import API_URL, SETTINGS_FILE
 
 class SubscriptionChecker:
-    def __init__(self, store: JsonStore | None = None):
+    def __init__(self, store: JsonStore | None = None, test: bool = False):
         self.store = store or JsonStore(SETTINGS_FILE)
+        self.test = test
 
     def status(self) -> tuple[str, str]:
+        if self.test:
+            return "Активна", "Тестовый режим"
         settings = self.store.load()
         key = settings.get('license_key', '')
         if not key:
