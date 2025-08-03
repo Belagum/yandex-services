@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+.venv/
+env/
+venv/
+
+# PyCharm / IDE
+.idea/
+*.iml
+
+# JSON settings/data
+*.json
+
+# System
+.DS_Store
+Thumbs.db

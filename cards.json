@@ -1,0 +1,12 @@
+{
+    "card2": {
+        "settings": {
+            "test": true
+        }
+    },
+    "card1": {
+        "settings": {
+            "test": true
+        }
+    }
+}
