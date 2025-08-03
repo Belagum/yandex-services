@@ -7,12 +7,12 @@ from app_utils.utils import version
 from app_ui.license_window import LicenseWindow
 
 class MainWindow(tk.Toplevel):
-    def __init__(self, parent):
-        super().__init__(parent or tk.Tk())
+    def __init__(self, parent, test=False):
+        super().__init__(parent)
         self.title("Яндекс услуги")
         self.geometry("300x200")
 
-        sub_status, _ = SubscriptionChecker().status()
+        sub_status, _ = SubscriptionChecker(test=test).status()
         self._build_status(sub_status)
         self._build_buttons()
         self._build_version()
@@ -36,23 +36,12 @@ class MainWindow(tk.Toplevel):
     def _open_cards(self):
         CardsManagerWindow(self)
 
-
-def _start_main(root): MainWindow(root)
-
 def run_app(test=False):
-    if test:
-        root = tk.Tk()
-        root.withdraw()
-        MainWindow(root)
-        root.mainloop()
-        return
-
     root = tk.Tk()
     root.withdraw()
 
-    if SubscriptionChecker().status()[0] == "Активна":
-        root.deiconify()
-        MainWindow(root)
+    if SubscriptionChecker(test=test).status()[0] == "Активна":
+        MainWindow(root, test=test)
     else:
         LicenseWindow(root, lambda: MainWindow(root))
 
