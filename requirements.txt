@@ -1,1 +1,2 @@
 requests~=2.32.4
+patchright~=1.52.5

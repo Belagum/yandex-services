@@ -1,39 +1,43 @@
+# app_ui/main_window.py
 import tkinter as tk
-from app_ui.cards_window import open_cards_window
-from app_utils.check_subscription import check_subscription
+from tkinter import messagebox
+from app_ui.cards_window import CardsManagerWindow
+from app_utils.subscription import SubscriptionChecker
 from app_utils.utils import version
 
 
-def _status(parent, status_text):
-    label = tk.Label(parent, text=f"Подписка: {status_text}")
-    label.pack(pady=(5, 0), fill='x')
-    return label
+class MainWindow(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.withdraw()
 
-def _buttons(parent):
-    f = tk.Frame(parent); f.pack(expand=True)
-    tk.Button(f, text="Запустить", command=lambda: print("Run")).pack(pady=10)
-    tk.Button(f, text="Управление карточками", command=lambda: open_cards_window(parent)).pack()
+        sub_status, sub_detail = SubscriptionChecker().status()
+        # if sub_status != "Активна":
+        #     messagebox.showerror(sub_status, sub_detail)
+        #     self.destroy(); return
 
-def _version(parent):
-    tk.Label(parent, text=version).pack(side='bottom', fill='x', pady=5)
+        self.deiconify()
+        self.title("Яндекс услуги")
+        self.geometry("300x200")
 
-def run_app():
-    root = tk.Tk()
-    root.withdraw()  # Сначала скрываем окно
+        self._build_status(sub_status)
+        self._build_buttons()
+        self._build_version()
 
-    sub_status, sub_detail, *_ = check_subscription()
+    def _build_status(self, status_text):
+        tk.Label(self, text=f"Подписка: {status_text}").pack(pady=(5, 0), fill='x')
 
-    # if sub_status != "Активна":
-    #     tk.messagebox.showerror(sub_status, sub_detail)
-    #     root.destroy()
-    #     return
+    def _build_buttons(self):
+        frame = tk.Frame(self)
+        frame.pack(expand=True)
+        tk.Button(frame, text="Запустить", command=lambda: print("Run")).pack(pady=10)
+        tk.Button(frame, text="Управление карточками", command=self._open_cards).pack()
 
-    root.deiconify() # если все ок показываем
-    root.title("Яндекс услуги")
-    root.geometry("300x200")
+    def _build_version(self):
+        tk.Label(self, text=version).pack(side='bottom', fill='x', pady=5)
 
-    _status(root, sub_status)
-    _buttons(root)
-    _version(root)
+    def _open_cards(self):
+        CardsManagerWindow(self)
 
-    root.mainloop()
+
+def run_app(): MainWindow().mainloop()
