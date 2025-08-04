@@ -6,8 +6,9 @@ from yandex_flow.helpers.CaptchaHelper import CaptchaHelper
 
 @dataclass
 class YandexServicesCfg:
-    url: str = "https://ya.ru/"
+    url: str = 'https://ya.ru/'
     wait_ms: int = 30000
+    yandex_services: str = 'Яндекс услуги'
 
 class YandexService(BaseHelper):
     def __init__(self, page, config: YandexServicesCfg):
@@ -25,7 +26,7 @@ class YandexService(BaseHelper):
     async def search(self):
         await self.open_page()
 
-        query = "123" + " Яндекс услгуги"
+        query = f"123 {self.config.yandex_services}"
 
         await self.fill("#text", query, press_enter=True)
         try:

@@ -8,7 +8,6 @@ class SubscriptionChecker:
         self.test = test
 
     def status(self) -> tuple[str, str]:
-        print(self.test)
         if self.test:
             return "Активна", "Тестовый режим"
         settings = self.store.load()

@@ -4,24 +4,51 @@ from app_utils.utils import CARDS_FILE
 from app_utils.storage import JsonStore
 
 class CardSettingsWindow(tk.Toplevel):
-    def __init__(self, parent: tk.Tk | tk.Toplevel, store: JsonStore, cards: dict, card_name: str, on_create=None):
+    def __init__(self, parent: tk.Tk | tk.Toplevel, store: JsonStore,
+                 cards: dict, card_name: str, on_create=None):
         super().__init__(parent)
         self.store, self.cards, self.card_name, self.on_create = store, cards, card_name, on_create
         self.settings = self.cards.setdefault(card_name, {}).setdefault("settings", {})
 
-        self.title(f"{'Создать' if on_create else 'Настройки'}: {card_name}")
-        self.geometry("250x120")
+        self.title(f'{"Создать" if on_create else "Настройки"}: {card_name}')
+        self.geometry("260x160")
+        self.columnconfigure(1, weight=1)
 
-        self.var_test = tk.BooleanVar(value=self.settings.get("test", False))
-        tk.Checkbutton(self, text="test", variable=self.var_test).pack(padx=10, pady=10)
+        fields = [
+            ("Исполнитель", "name"),
+            ("Город", "city"),
+            ("Время в карточке, c", "time_on_card")
+        ]
+        self.vars: dict[str, tk.StringVar] = {}
+        for i, (lbl, key) in enumerate(fields):
+            tk.Label(self, text=lbl).grid(row=i, column=0, sticky="w", padx=10, pady=4)
+            v = tk.StringVar(value=str(self.settings.get(key, "")))
+            tk.Entry(self, textvariable=v).grid(row=i, column=1, sticky="ew", padx=10, pady=4)
+            self.vars[key] = v
 
-        tk.Button(self, text="Сохранить", command=self._save).pack(side="bottom", padx=10, pady=10)
+        self.var_click = tk.BooleanVar(value=self.settings.get("click_phone", False))
+        tk.Checkbutton(self, text="Нажимать телефон", variable=self.var_click).grid(
+            row=len(fields), column=0, columnspan=2, padx=10, pady=4, sticky="w"
+        )
+
+        tk.Button(self, text="Сохранить", command=self._save).grid(
+            row=len(fields) + 1, column=0, columnspan=2, sticky="ew", padx=10, pady=10
+        )
 
     def _save(self):
-        self.settings["test"] = self.var_test.get()
+        vals = {k: v.get().strip() for k, v in self.vars.items()}
+        if "" in vals.values():
+            messagebox.showerror("Ошибка", "Все поля должны быть заполнены"); return
+        try:
+            t = int(vals["time_on_card"])
+        except ValueError:
+            messagebox.showerror("Ошибка", "Время должно быть числом"); return
+        if t < 45:
+            messagebox.showerror("Ошибка", "Время не должно быть менее 45 секунд"); return
+        self.settings.update(vals)
+        self.settings["click_phone"] = self.var_click.get()
         self.store.save(self.cards)
-        if self.on_create:
-            self.on_create(self.card_name)
+        if self.on_create: self.on_create(self.card_name)
         self.destroy()
 
 
@@ -82,10 +109,11 @@ class CardsManagerWindow(tk.Toplevel):
             CardSettingsWindow(self, self.store, self.cards, self.lb.get(sel[0]))
 
     def _delete_selected(self):
-        if not messagebox.askokcancel("Удалить", "Удалить выбранную карточку?"):
-            return
         sel = self.lb.curselection()
         if not sel:
+            messagebox.showerror("Ошибка", "Карточка не выбрана")
+            return
+        if not messagebox.askokcancel("Удалить", "Удалить выбранную карточку?"):
             return
         name = self.lb.get(sel[0])
         self.cards.pop(name, None)
