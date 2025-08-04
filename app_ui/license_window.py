@@ -23,12 +23,10 @@ class LicenseWindow(tk.Toplevel):
         tk.Button(self, text="Сохранить", command=self._save).pack(side="bottom", padx=10, pady=10)
         self._validate()
 
-
     def _validate(self):
         status, _ = self.checker.status()
         self.msg.config(text="" if status == "Активна" else "Ключ неактивен")
         if status == "Активна":
-            self.master.destroy()
             self.destroy()
             self.on_ok()
 
