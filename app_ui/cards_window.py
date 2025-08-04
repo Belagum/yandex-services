@@ -82,11 +82,44 @@ class CardsManagerWindow(tk.Toplevel):
         self.lb.pack(padx=10, pady=5, fill="both", expand=True)
 
     def _build_buttons_section(self):
-        frame = tk.Frame(self)
+        frame = tk.Frame(self);
         frame.pack(side="bottom", fill="x", padx=10, pady=10)
+        tk.Button(frame, text="Удалить выбранную", command=self._delete_selected) \
+            .grid(row=0, column=0, sticky="ew", padx=5)
+        tk.Button(frame, text="Настройки карточки", command=self._edit_selected) \
+            .grid(row=0, column=1, sticky="ew", padx=5)
+        tk.Button(frame, text="Изменить ключевые слова", command=self._edit_keywords) \
+            .grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=(6, 0))
+        frame.columnconfigure(0, weight=1)
+        frame.columnconfigure(1, weight=1)
 
-        tk.Button(frame, text="Удалить выбранную", command=self._delete_selected).pack(side="left", expand=True)
-        tk.Button(frame, text="Настройки карточки", command=self._edit_selected).pack(side="left", expand=True)
+    def _edit_keywords(self):
+        sel = self.lb.curselection()
+        if not sel:
+            messagebox.showerror("Ошибка", "Карточка не выбрана")
+            return
+        name = self.lb.get(sel[0])
+        s = self.cards[name].setdefault("settings", {})
+        win = tk.Toplevel(self)
+        win.title(f"Ключевые слова: {name}")
+        win.geometry("320x340")
+        win.rowconfigure(0, weight=1)
+        win.columnconfigure(0, weight=1)
+        txt = tk.Text(win)
+        txt.insert("1.0", "\n".join(s.get("keywords", [])))
+        txt.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        tk.Button(win, text="Сохранить",
+                  command=lambda: self._save_keywords(win, txt, s)).grid(row=1, column=0,
+                                                                         sticky="ew", padx=10, pady=(0, 10))
+
+    def _save_keywords(self, win: tk.Toplevel, txt: tk.Text, settings: dict):
+        kws = [w.strip() for w in txt.get("1.0", "end").splitlines() if w.strip()]
+        if not kws:
+            messagebox.showerror("Ошибка", "Список ключевых слов не может быть пустым")
+            return
+        settings["keywords"] = kws
+        self.store.save(self.cards)
+        win.destroy()
 
     def _add_card(self):
         name = self.entry.get().strip()
