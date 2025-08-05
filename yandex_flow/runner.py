@@ -46,12 +46,13 @@ class _StatsWriter:
 
 
 class Runner:
-    def __init__(self, names: list[str], headless: bool, threads: int):
+    def __init__(self, names: list[str], headless: bool, threads: int, position: bool):
         data = JsonStore(CARDS_FILE).load()
         self.configs: list[CardConfig] = [
             CardConfig.from_raw(n, data[n]) for n in names if n in data
         ]
         self.headless = bool(headless)
+        self.position = bool(position)
         self.threads = max(1, min(threads, 15))
         self._writer = _StatsWriter("stats.txt")
 
@@ -73,16 +74,21 @@ class Runner:
                 if not ok:
                     self._writer.write(f"{cfg.name}: {res}")
                     return
+
                 ok, res = await svc.verify_city()
                 if not ok:
                     self._writer.write(f"{cfg.name}: {res}")
                     return
+
                 ok, res = await svc.find_executor()
-                if not ok:
+                if self.position or not ok:          # в режиме позиций здесь КОНЧАЕМ
                     self._writer.write(f"{cfg.name}: {res}")
                     return
+
                 ok, res = await svc.perform_random_action()
-                self._writer.write(f"{cfg.name}: {res}" if ok else f"{cfg.name}: action error: {res}")
+                self._writer.write(
+                    f"{cfg.name}: {res}" if ok else f"{cfg.name}: action error: {res}"
+                )
         except Exception as e:
             self._writer.write(f"{cfg.name}: exception: {e}")
 

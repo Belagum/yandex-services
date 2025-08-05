@@ -29,6 +29,8 @@ class RunWindow(tk.Toplevel):
     def _build_opts(self):
         f = tk.Frame(self); f.pack(fill="x", padx=10)
         self.var_headless = tk.BooleanVar()
+        self.var_position = tk.BooleanVar()
+        tk.Checkbutton(f, text="Режим сбора позиций", variable=self.var_position).pack(anchor="w", pady=(0, 5))
         tk.Checkbutton(f, text="Headless", variable=self.var_headless).pack(anchor="w", pady=(0, 5))
         tk.Label(f, text="Потоки").pack(anchor="w")
         self.var_threads = tk.IntVar(value=1)
@@ -45,15 +47,26 @@ class RunWindow(tk.Toplevel):
             return
         sel = [n for n, v in self.card_vars.items() if v.get()]
         if not sel:
-            messagebox.showerror("Ошибка", "Не выбрана ни одна карточка");
+            messagebox.showerror("Ошибка", "Не выбрана ни одна карточка")
             return
 
-        params = dict(cards=sel, headless=self.var_headless.get(), threads=self.var_threads.get())
+        params = dict(
+            cards=sel,
+            headless=self.var_headless.get(),
+            threads=self.var_threads.get(),
+            position=self.var_position.get()
+        )
         log.info(f"Запуск: {params}")
 
         self.destroy()
 
         def _bg():
-            Runner(sel, self.var_headless.get(), self.var_threads.get()).run()
+            Runner(
+                sel,
+                self.var_headless.get(),
+                self.var_threads.get(),
+                self.var_position.get()
+            ).run()
 
         threading.Thread(target=_bg, daemon=True).start()
+

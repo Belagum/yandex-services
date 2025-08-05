@@ -183,7 +183,7 @@ class YandexService(BaseHelper, RandomActionsMixin):
                         await new_page.wait_for_load_state("domcontentloaded", timeout=self.config.timeout)
                         self.update_page(new_page)
                         log.info(f"'{self.config.name}' найден и открыт")
-                        return True, "Исполнитель найден"
+                        return True, f"Исполнитель найден на позиции {misses + 1}"
 
                     misses += 1
                 else:
