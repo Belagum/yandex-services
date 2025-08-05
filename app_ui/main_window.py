@@ -2,6 +2,7 @@ import logging
 import tkinter as tk
 from app_ui.captcha_window import CaptchaSettingsWindow
 from app_ui.cards_window import CardsManagerWindow
+from app_ui.monitoring_window import MonitoringWindow
 from app_utils.subscription import SubscriptionChecker
 from app_utils.utils import version
 from app_ui.license_window import LicenseWindow
@@ -28,6 +29,8 @@ class MainWindow(tk.Toplevel):
         frame = tk.Frame(self); frame.pack(expand=True, pady=5)
         tk.Button(frame, text="Запустить", command=self._open_run).pack(pady=3, fill="x")
         tk.Button(frame, text="Управление карточками", command=self._open_cards).pack(pady=3, fill="x")
+        tk.Button(frame, text="Мониторинг", command=self._open_monitoring_window).pack(pady=3, fill="x")
+
         tk.Button(frame, text="Решение капчи", command=self._open_captcha).pack(pady=3, fill="x")
 
     def _open_run(self):
@@ -45,6 +48,10 @@ class MainWindow(tk.Toplevel):
     def _open_captcha(self):
         log.info("Открыто окно решения капчи")
         CaptchaSettingsWindow(self)
+
+    def _open_monitoring_window(self):
+        log.info("Открыто окно мониторинга")
+        MonitoringWindow(self)
 
     def _build_version(self):
         tk.Label(self, text=version).pack(side='bottom', fill='x', pady=5)

@@ -6,7 +6,7 @@ from app_ui.license_window import LicenseWindow
 from app_utils.storage import JsonStore
 from app_utils.subscription import SubscriptionChecker
 from app_utils.utils import CARDS_FILE
-from yandex_flow.runner import Runner
+from yandex_flow.runner.runner import Runner
 
 log = logging.getLogger(__name__)
 
