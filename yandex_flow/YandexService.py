@@ -19,10 +19,15 @@ class YandexServicesCfg:
     link_selector_tpl: str = "a[href*='{fragment}']"
     services_search_input: str = 'input.Textinput-Control[name="text"][placeholder="Чем вам помочь?"]'
     services_name_executor_a: str = 'a.Link.WorkerCard-Title'
-    search_btn = 'a[aria-label=Мессенджер]'
-    photo_a = 'a.Link.PhotoGallery-Image'
-    service_name_a = 'div.ProfileServiceCard-MainLeft a.Link'
-    expand_services_btn = 'div.SpecializationCard-CollapsibleList a.Link'
+    search_btn: str = 'a[aria-label=Мессенджер]'
+    photo_a: str  = 'a.Link.PhotoGallery-Image'
+    service_name_a: str  = 'div.ProfileServiceCard-MainLeft a.Link'
+    expand_services_btn: str  = 'div.SpecializationCard-CollapsibleList a.Link'
+    close_service_windows_btn: str = 'div.YdoModal-BackButton'
+    min_view_services: int = 2
+    max_view_services: int = 5
+    min_wait_before_close: float = 1.0
+    max_wait_before_close: float = 2.5
     min_wait_after_verify_city: int = 3
     max_wait_after_verify_city: int = 6
     block_chance: float = 0.5
@@ -143,3 +148,26 @@ class YandexService(BaseHelper):
 
         log.info(f"'{name}' не найден (проверено {misses} карточек)")
         return False, "Исполнитель не найден"
+
+    async def _click_random_services(self) -> None:
+        if await self.is_present(self.config.expand_services_btn):
+            await self.click(self.config.expand_services_btn)
+            log.debug("Раскрыт список услуг")
+
+        locator = self.page.locator(self.config.service_name_a)
+        total = await locator.count()
+        count = min(total, random.randint(self.config.min_view_services, self.config.max_view_services))
+        if not count:
+            log.debug("Нет услуг для клика")
+            return
+
+        indices = random.sample(range(total), count)
+        log.debug(f"Кликаю по {count}/{total} услугам: {indices}")
+        for idx in indices:
+            await self.click(self.config.service_name_a, index=idx)
+            await self.page.wait_for_timeout(
+                random.randint(self.config.min_wait_before_close, self.config.max_wait_before_close) * 1000
+            )
+            if await self.is_present(self.config.close_service_windows_btn):
+                await self.click(self.config.close_service_windows_btn)
+                log.debug(f"Закрыл услугу #{idx}")
