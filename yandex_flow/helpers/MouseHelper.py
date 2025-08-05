@@ -11,25 +11,26 @@ class MouseHelper:
 
     async def click(
             self,
-            selector: str,
+            target,
             *,
             index: int = 0,
             last: bool = False
     ) -> None:
         try:
-            elements = await self.page.locator(selector).all()
-            n = len(elements)
-            if n == 0:
-                log.error(f"Selector not found → '{selector}'")
-                raise ValueError(f"No elements found for selector '{selector}'")
-
-            element = elements[-1] if last else elements[index]
+            if isinstance(target, str):
+                loc = self.page.locator(target)
+                elements = await loc.all()
+                if not elements:
+                    log.error(f"Selector not found → '{target}'")
+                    raise ValueError(f"No elements for selector '{target}'")
+                element = elements[-1] if last else elements[index]
+            else:
+                element = target
 
             await element.scroll_into_view_if_needed()
             box = await element.bounding_box()
             if box is None:
-                log.error(f"Element hidden or offscreen → '{selector}'")
-                raise ValueError(f"Element for selector '{selector}' is hidden or offscreen")
+                raise ValueError("Element hidden/off-screen")
 
             tx = box["x"] + box["width"] / 2 + random.uniform(*self.jitter)
             ty = box["y"] + box["height"] / 2 + random.uniform(*self.jitter)
@@ -49,7 +50,6 @@ class MouseHelper:
             await asyncio.sleep(random.uniform(*self.pause))
             delay = random.randint(*self.delay)
             await self.page.mouse.click(tx, ty, delay=delay)
-            log.debug(f"Mouse clicked → selector='{selector}', last={last}, delay={delay}ms, index={index}")
-
+            log.debug(f"Mouse clicked → locator={element}, delay={delay}ms")
         except Exception as e:
             log.error(f"Click failed → {e}")
