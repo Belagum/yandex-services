@@ -1,14 +1,37 @@
 import random, logging
 from typing import Callable, Awaitable, Any
 from patchright.async_api import Page
-from yandex_flow.YandexService import YandexServicesCfg
+from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
 
+@dataclass(frozen=True, slots=True)
+class RandomActionsCfg:
+    photo_a: str
+    next_photo_btn: str
+    close_photo_btn: str
+    min_wait_in_photo: float
+    max_wait_in_photo: float
+    min_photo_view: int
+    max_photo_view: int
+
+    service_name_a: str
+    expand_services_btn: str
+    close_service_windows_btn: str
+    min_view_services: int
+    max_view_services: int
+    min_wait_before_close: float
+    max_wait_before_close: float
+
+    examples_div: str
+    close_example_btn: str
+    min_wait_in_example: float
+    max_wait_in_example: float
+
 class RandomActionsMixin:
     page: Page
-    config: YandexServicesCfg
     click: Callable[..., Awaitable[Any]]
+    actions_cfg: RandomActionsCfg
     is_present: Callable[..., Awaitable[bool]]
 
     async def _click_random_items(
@@ -39,47 +62,47 @@ class RandomActionsMixin:
                 log.debug(f"Закрыл {description} #{idx}")
 
     async def click_random_photos(self) -> None:
-        if await self.is_present(self.config.photo_a):
-            await self.click(self.config.photo_a)
+        if await self.is_present(self.actions_cfg.photo_a):
+            await self.click(self.actions_cfg.photo_a)
             log.debug("Открыта первая фотография")
 
-        count = random.randint(self.config.min_photo_view, self.config.max_photo_view)
+        count = random.randint(self.actions_cfg.min_photo_view, self.actions_cfg.max_photo_view)
         log.debug(f"Буду пролистывать {count} фотографий")
 
         for i in range(count):
-            delay = random.randint(self.config.min_wait_in_photo, self.config.max_wait_in_photo) * 1000
+            delay = random.uniform(self.actions_cfg.min_wait_in_photo, self.actions_cfg.max_wait_in_photo) * 1000
             await self.page.wait_for_timeout(delay)
-            if not await self.is_present(self.config.next_photo_btn):
+            if not await self.is_present(self.actions_cfg.next_photo_btn):
                 log.warning(f"Кнопка следующей фото не найдена на шаге {i + 1}")
                 break
-            await self.click(self.config.next_photo_btn)
+            await self.click(self.actions_cfg.next_photo_btn)
             log.debug(f"Перелистнута фотография #{i + 1}")
 
-        if await self.is_present(self.config.close_photo_btn):
-            await self.click(self.config.close_photo_btn)
+        if await self.is_present(self.actions_cfg.close_photo_btn):
+            await self.click(self.actions_cfg.close_photo_btn)
             log.debug("Закрыт просмотр фотографий")
 
     async def click_random_examples(self) -> None:
         await self._click_random_items(
-            item_selector=self.config.examples_div,
-            close_selector=self.config.close_example_btn,
-            min_view=self.config.min_view_services,
-            max_view=self.config.max_view_services,
-            min_wait=self.config.min_wait_in_example,
-            max_wait=self.config.max_wait_in_example,
+            item_selector=self.actions_cfg.examples_div,
+            close_selector=self.actions_cfg.close_example_btn,
+            min_view=self.actions_cfg.min_view_services,
+            max_view=self.actions_cfg.max_view_services,
+            min_wait=self.actions_cfg.min_wait_in_example,
+            max_wait=self.actions_cfg.max_wait_in_example,
             description="примеров работ",
         )
 
     async def click_random_services(self) -> None:
-        if await self.is_present(self.config.expand_services_btn):
-            await self.click(self.config.expand_services_btn)
+        if await self.is_present(self.actions_cfg.expand_services_btn):
+            await self.click(self.actions_cfg.expand_services_btn)
             log.debug("Раскрыт список услуг")
         await self._click_random_items(
-            item_selector=self.config.service_name_a,
-            close_selector=self.config.close_service_windows_btn,
-            min_view=self.config.min_view_services,
-            max_view=self.config.max_view_services,
-            min_wait=self.config.min_wait_before_close,
-            max_wait=self.config.max_wait_before_close,
+            item_selector=self.actions_cfg.service_name_a,
+            close_selector=self.actions_cfg.close_service_windows_btn,
+            min_view=self.actions_cfg.min_view_services,
+            max_view=self.actions_cfg.max_view_services,
+            min_wait=self.actions_cfg.min_wait_before_close,
+            max_wait=self.actions_cfg.max_wait_before_close,
             description="услуг",
         )

@@ -8,7 +8,7 @@ from helpers.BaseHelper import BaseHelper
 from yandex_flow.helpers.CaptchaHelper import CaptchaHelper
 from difflib import SequenceMatcher
 
-from yandex_flow.helpers.RandomActionsMixin import RandomActionsMixin
+from yandex_flow.helpers.RandomActionsMixin import RandomActionsMixin, RandomActionsCfg
 
 log = logging.getLogger(__name__)
 
@@ -61,9 +61,29 @@ class YandexService(BaseHelper, RandomActionsMixin):
     def __init__(self, page: Page, config: YandexServicesCfg):
         super().__init__(page)
         self.config = config
+        self.actions_cfg = RandomActionsCfg(
+            photo_a=config.photo_a,
+            next_photo_btn=config.next_photo_btn,
+            close_photo_btn=config.close_photo_btn,
+            min_wait_in_photo=config.min_wait_in_photo,
+            max_wait_in_photo=config.max_wait_in_photo,
+            min_photo_view=config.min_photo_view,
+            max_photo_view=config.max_photo_view,
+            service_name_a=config.service_name_a,
+            expand_services_btn=config.expand_services_btn,
+            close_service_windows_btn=config.close_service_windows_btn,
+            min_view_services=config.min_view_services,
+            max_view_services=config.max_view_services,
+            min_wait_before_close=config.min_wait_before_close,
+            max_wait_before_close=config.max_wait_before_close,
+            examples_div=config.examples_div,
+            close_example_btn=config.close_example_btn,
+            min_wait_in_example=config.min_wait_in_example,
+            max_wait_in_example=config.max_wait_in_example,
+        )
         self.solve_captcha = CaptchaHelper(page).solve
 
-    def update_page(self, new_page):  # noqa: D401
+    def update_page(self, new_page):
         self.page = new_page
         self.mouse.page = new_page
         self.form.page = new_page
@@ -194,7 +214,7 @@ class YandexService(BaseHelper, RandomActionsMixin):
                 if await self.is_present(self.config.phone_yes_btn):
                     await self.click(self.config.phone_yes_btn)
                     log.debug("Кликнул кнопку «Да» после показа телефона")
-                await self.click(self.config.close_phone_btn)
+            await self.click(self.config.close_phone_btn)
 
         elapsed = time.monotonic() - started
         if elapsed < min_time_in_card:

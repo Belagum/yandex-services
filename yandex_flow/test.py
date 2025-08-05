@@ -13,6 +13,7 @@ async def main():
         await service.search(query=query)
         await service.verify_city(city="иваново")
         await service.find_executor(name="Николай С.")
+        await service.perform_random_action(click_phone=True)
         input()
 
 if __name__ == "__main__":
