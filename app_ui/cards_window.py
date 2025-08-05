@@ -6,15 +6,35 @@ from app_utils.storage import JsonStore
 
 logger = logging.getLogger(__name__)
 
+class KeywordsEditorDialog(tk.Toplevel):
+    def __init__(self, parent, settings: dict, on_save):
+        super().__init__(parent)
+        self.settings, self.on_save = settings, on_save
+        self.title("Ключевые слова")
+        self.geometry("320x340")
+        self.rowconfigure(0, weight=1); self.columnconfigure(0, weight=1)
+        self.txt = tk.Text(self); self.txt.insert("1.0", "\n".join(settings.get("keywords", [])))
+        self.txt.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        tk.Button(self, text="Сохранить", command=self._save).grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
+    def _save(self):
+        kws = [w.strip() for w in self.txt.get("1.0", "end").splitlines() if w.strip()]
+        if not kws:
+            messagebox.showerror("Ошибка", "Список ключевых слов не может быть пустым")
+            return
+        self.settings["keywords"] = kws
+        self.on_save()
+        self.destroy()
+
 class CardSettingsWindow(tk.Toplevel):
-    def __init__(self, parent: tk.Tk | tk.Toplevel, store: JsonStore, cards: dict, card_name: str, on_create=None):
+    def __init__(self, parent: tk.Tk | tk.Toplevel, store: JsonStore,
+                 cards: dict, card_name: str, on_create=None):
         super().__init__(parent)
         self.store, self.cards, self.card_name, self.on_create = store, cards, card_name, on_create
         self.settings = self.cards.setdefault(card_name, {}).setdefault("settings", {})
         self.title(f'{"Создать" if on_create else "Настройки"}: {card_name}')
         self.geometry("260x160")
         self.columnconfigure(1, weight=1)
-        logger.info(f"Открыто окно {'создания' if on_create else 'настройки'} карточки '{card_name}'")
+
         fields = [("Исполнитель", "name"), ("Город", "city"), ("Время в карточке, c", "time_on_card")]
         self.vars: dict[str, tk.StringVar] = {}
         for i, (lbl, key) in enumerate(fields):
@@ -22,34 +42,33 @@ class CardSettingsWindow(tk.Toplevel):
             v = tk.StringVar(value=str(self.settings.get(key, "")))
             tk.Entry(self, textvariable=v).grid(row=i, column=1, sticky="ew", padx=10, pady=4)
             self.vars[key] = v
+
         self.var_click = tk.BooleanVar(value=self.settings.get("click_phone", False))
-        tk.Checkbutton(self, text="Нажимать телефон", variable=self.var_click).grid(row=len(fields), column=0, columnspan=2, padx=10, pady=4, sticky="w")
-        tk.Button(self, text="Сохранить", command=self._save).grid(row=len(fields) + 1, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
+        tk.Checkbutton(self, text="Нажимать телефон", variable=self.var_click)\
+            .grid(row=len(fields), column=0, columnspan=2, padx=10, pady=4, sticky="w")
+        tk.Button(self, text="Сохранить", command=self._save)\
+            .grid(row=len(fields) + 1, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
 
     def _save(self):
         vals = {k: v.get().strip() for k, v in self.vars.items()}
         if "" in vals.values():
-            logger.error("Ошибка сохранения: не все поля заполнены")
-            messagebox.showerror("Ошибка", "Все поля должны быть заполнены")
-            return
-        try:
-            t = int(vals["time_on_card"])
+            messagebox.showerror("Ошибка", "Все поля должны быть заполнены"); return
+        try: t = int(vals["time_on_card"])
         except ValueError:
-            logger.error("Ошибка сохранения: время не число")
-            messagebox.showerror("Ошибка", "Время должно быть числом")
-            return
+            messagebox.showerror("Ошибка", "Время должно быть числом"); return
         if t < 45:
-            logger.error("Ошибка сохранения: время менее 45 секунд")
-            messagebox.showerror("Ошибка", "Время не должно быть менее 45 секунд")
-            return
-        self.settings.update(vals)
-        self.settings["click_phone"] = self.var_click.get()
-        self.store.save(self.cards)
-        logger.info(f"Настройки сохранены для карточки '{self.card_name}': {self.settings}")
+            messagebox.showerror("Ошибка", "Время не должно быть менее 45 секунд"); return
+        self.settings.update(vals); self.settings["click_phone"] = self.var_click.get()
         if self.on_create:
-            self.on_create(self.card_name)
-            logger.info(f"Вызван on_create для карточки '{self.card_name}'")
-        self.destroy()
+            self.withdraw()
+            def _on_kw_saved():
+                self.store.save(self.cards)
+                self.on_create(self.card_name)
+                self.destroy()
+            KeywordsEditorDialog(self, self.settings, _on_kw_saved)
+        else:
+            self.store.save(self.cards)
+            self.destroy()
 
 class CardsManagerWindow(tk.Toplevel):
     def __init__(self, parent: tk.Tk):
@@ -87,16 +106,13 @@ class CardsManagerWindow(tk.Toplevel):
     def _edit_keywords(self):
         sel = self.lb.curselection()
         if not sel:
-            logger.error("Попытка редактирования ключевых слов без выбора карточки")
-            messagebox.showerror("Ошибка", "Карточка не выбрана")
-            return
+            messagebox.showerror("Ошибка", "Карточка не выбрана"); return
         name = self.lb.get(sel[0])
-        logger.info(f"Открыто окно ключевых слов для '{name}'")
         s = self.cards[name].setdefault("settings", {})
-        win = tk.Toplevel(self); win.title(f"Ключевые слова: {name}"); win.geometry("320x340")
-        win.rowconfigure(0, weight=1); win.columnconfigure(0, weight=1)
-        txt = tk.Text(win); txt.insert("1.0", "\n".join(s.get("keywords", []))); txt.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        tk.Button(win, text="Сохранить", command=lambda: self._save_keywords(win, txt, s)).grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
+        def _on_kw_saved():
+            self.store.save(self.cards)
+            logger.info(f"Ключевые слова сохранены для '{name}': {s['keywords']}")
+        KeywordsEditorDialog(self, s, _on_kw_saved)
 
     def _save_keywords(self, win: tk.Toplevel, txt: tk.Text, settings: dict):
         kws = [w.strip() for w in txt.get("1.0", "end").splitlines() if w.strip()]
