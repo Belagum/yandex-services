@@ -5,12 +5,14 @@ from app_ui.cards_window import CardsManagerWindow
 from app_utils.subscription import SubscriptionChecker
 from app_utils.utils import version
 from app_ui.license_window import LicenseWindow
+from app_ui.run_window import RunWindow
 
 log = logging.getLogger(__name__)
 
 class MainWindow(tk.Toplevel):
     def __init__(self, parent, test=False):
         super().__init__(parent)
+        self.test = test
         sub_status, _ = SubscriptionChecker(test=test).status()
         log.info(f"MainWindow открыто, статус подписки: {sub_status}")
         self.title("Яндекс услуги")
@@ -29,17 +31,20 @@ class MainWindow(tk.Toplevel):
         tk.Button(frame, text="Решение капчи", command=self._open_captcha).pack(pady=3, fill="x")
 
     def _open_run(self):
-        log.info("Открыто окно запуска")
-        from app_ui.run_window import RunWindow
-        RunWindow(self)
+        if SubscriptionChecker(test=self.test).status()[0] == "Активна":
+            RunWindow(self, test=self.test)
+        else:
+            LicenseWindow(self, lambda: RunWindow(self, test=self.test))
+
+    def _open_cards(self):
+        if SubscriptionChecker(test=self.test).status()[0] == "Активна":
+            CardsManagerWindow(self)
+        else:
+            LicenseWindow(self, lambda: CardsManagerWindow(self))
 
     def _open_captcha(self):
         log.info("Открыто окно решения капчи")
         CaptchaSettingsWindow(self)
-
-    def _open_cards(self):
-        log.info("Открыто окно управления карточками")
-        CardsManagerWindow(self)
 
     def _build_version(self):
         tk.Label(self, text=version).pack(side='bottom', fill='x', pady=5)

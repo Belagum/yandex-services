@@ -1,13 +1,18 @@
 import logging, tkinter as tk
 from tkinter import messagebox
+
+from app_ui.license_window import LicenseWindow
 from app_utils.storage import JsonStore
+from app_utils.subscription import SubscriptionChecker
 from app_utils.utils import CARDS_FILE
+from yandex_flow.runner import Runner
 
 log = logging.getLogger(__name__)
 
 class RunWindow(tk.Toplevel):
-    def __init__(self, parent: tk.Tk | tk.Toplevel):
+    def __init__(self, parent: tk.Tk | tk.Toplevel, test=False):
         super().__init__(parent)
+        self.test = test
         self.store = JsonStore(CARDS_FILE)
         self.cards = self.store.load()
         self.title("Запуск"); self.geometry("300x400")
@@ -34,9 +39,13 @@ class RunWindow(tk.Toplevel):
         tk.Button(b, text="Старт", command=self._run).pack(fill="x")
 
     def _run(self):
+        if SubscriptionChecker(test=self.test).status()[0] != "Активна":
+            LicenseWindow(self, lambda: None)
+            return
         sel = [n for n, v in self.card_vars.items() if v.get()]
         if not sel:
             messagebox.showerror("Ошибка", "Не выбрана ни одна карточка"); return
         params = dict(cards=sel, headless=self.var_headless.get(), threads=self.var_threads.get())
         log.info(f"Запуск: {params}")
+        Runner(sel, self.var_headless.get(), self.var_threads.get()).run()
         self.destroy()

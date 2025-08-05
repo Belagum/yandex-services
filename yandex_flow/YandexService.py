@@ -122,8 +122,8 @@ class YandexService(BaseHelper, RandomActionsMixin):
             self.update_page(new_page)
             return True, "Клик по нужному сайту выполнен"
         except Exception as e:
-            log.error(f"Ошибка в методе search: {e}")
-            return False, "Ошибка при поиске"
+            log.exception(f"Ошибка в методе search:")
+            return False, f"Ошибка при поиске: {e}"
 
     async def verify_city(self, city: str) -> tuple[bool, str]:
         try:
@@ -153,74 +153,77 @@ class YandexService(BaseHelper, RandomActionsMixin):
             await self.page.wait_for_timeout(random.randint(self.config.min_wait_after_verify_city, self.config.max_wait_after_verify_city) * 1000)
             return True, "Город уточнён запросом"
         except Exception as e:
-            log.error(f"verify_city failed: {e}")
-            return False, f"Ошибка: {e}"
+            log.exception(f"Ошибка в verify_city:")
+            return False, f"Ошибка в проверке города: {e}"
 
     async def find_executor(self, name: str, *, max_miss: int = 10, sim_threshold: float = 0.85) -> tuple[bool, str]:
-        loc = self.page.locator(self.config.services_name_executor_a)
-        misses = 0
-        log.debug(f"start search: '{name}'")
+        try:
+            loc = self.page.locator(self.config.services_name_executor_a)
+            misses = 0
+            log.debug(f"start search: '{name}'")
 
-        while misses < max_miss:
-            total = await loc.count()
-            if misses < total:
-                el = loc.nth(misses)
-                text = (await el.text_content() or "").partition("\n")[0].strip()
-                sim = SequenceMatcher(None, text, name).ratio()
-                log.debug(f"#{misses + 1}: {text!r} ~ {name!r} → {sim:.2f}")
+            while misses < max_miss:
+                total = await loc.count()
+                if misses < total:
+                    el = loc.nth(misses)
+                    text = (await el.text_content() or "").partition("\n")[0].strip() # type: ignore
+                    sim = SequenceMatcher(None, text, name).ratio()
+                    log.debug(f"#{misses + 1}: {text!r} ~ {name!r} → {sim:.2f}")
 
-                if sim >= sim_threshold:
-                    waiter = self.page.context.wait_for_event("page")
-                    await self.click(el)
-                    new_page = await waiter
-                    await new_page.wait_for_load_state("domcontentloaded", timeout=self.config.timeout)
-                    self.update_page(new_page)
-                    log.info(f"'{name}' найден и открыт")
-                    return True, "Исполнитель найден"
+                    if sim >= sim_threshold:
+                        waiter = self.page.context.wait_for_event("page")
+                        await self.click(el)
+                        new_page = await waiter
+                        await new_page.wait_for_load_state("domcontentloaded", timeout=self.config.timeout)
+                        self.update_page(new_page)
+                        log.info(f"'{name}' найден и открыт")
+                        return True, "Исполнитель найден"
 
-                misses += 1
+                    misses += 1
+                else:
+                    log.debug(f"просмотрено {misses} карточек, скроллю ниже…")
+                    await self.page.mouse.wheel(0, 1200)
+                    await self.page.wait_for_timeout(500)
+
+            log.error(f"'{name}' не найден (проверено {misses} карточек)")
+            return False, "Исполнитель не найден"
+        except Exception as e:
+            log.exception("Ошибка в find_executor:")
+            return False, f"Ошибка в поиске исполнителя: {e}"
+
+    async def perform_random_action(self, *, click_phone: bool = False, min_time_in_card: int = 45) -> tuple[bool, str]:
+        try:
+            started = time.monotonic()
+            actions = (
+                (self.click_random_photos, "фото"),
+                (self.click_random_services, "услуг"),
+                (self.click_random_examples, "примеров"),
+            )
+            for coro, title in actions:
+                if random.random() < 0.5:
+                    log.debug(f"Запускаю действие: {title}")
+                    await coro()
+                else:
+                    log.debug(f"Пропускаю действие: {title}")
+            if click_phone and await self.is_present(self.config.phone_btn):
+                await self.click(self.config.phone_btn, index=0)
+                log.debug("Кликнул кнопку «Телефон»")
+                if random.random() < self.config.click_yes_in_phone:
+                    await self.page.wait_for_timeout(
+                        random.randint(self.config.min_wait_in_phone, self.config.max_wait_in_phone) * 1000
+                    )
+                    if await self.is_present(self.config.phone_yes_btn):
+                        await self.click(self.config.phone_yes_btn)
+                        log.debug("Кликнул кнопку «Да» после показа телефона")
+                await self.click(self.config.close_phone_btn)
+            elapsed = time.monotonic() - started
+            if elapsed < min_time_in_card:
+                wait_left = min_time_in_card - elapsed
+                log.debug(f"Действия заняли {elapsed:.1f} с — ждём ещё {wait_left:.1f} с")
+                await self.page.wait_for_timeout(wait_left * 1000)
             else:
-                log.debug(f"просмотрено {misses} карточек, скроллю ниже…")
-                await self.page.mouse.wheel(0, 1200)
-                await self.page.wait_for_timeout(500)
-
-        log.error(f"'{name}' не найден (проверено {misses} карточек)")
-        return False, "Исполнитель не найден"
-
-    async def perform_random_action(self, *, click_phone: bool = False, min_time_in_card: int = 45) -> None:
-        started = time.monotonic()
-
-        actions = (
-            (self.click_random_photos, "фото"),
-            (self.click_random_services, "услуг"),
-            (self.click_random_examples, "примеров"),
-        )
-
-        for coro, title in actions:
-            if random.random() < 0.5:
-                log.debug(f"Запускаю действие: {title}")
-                await coro()
-            else:
-                log.debug(f"Пропускаю действие: {title}")
-
-        if click_phone and await self.is_present(self.config.phone_btn):
-            await self.click(self.config.phone_btn, index=0)
-            log.debug("Кликнул кнопку «Телефон»")
-
-            if random.random() < self.config.click_yes_in_phone:
-                await self.page.wait_for_timeout(
-                    random.randint(self.config.min_wait_in_phone, self.config.max_wait_in_phone) * 1000
-                )
-                if await self.is_present(self.config.phone_yes_btn):
-                    await self.click(self.config.phone_yes_btn)
-                    log.debug("Кликнул кнопку «Да» после показа телефона")
-            await self.click(self.config.close_phone_btn)
-
-        elapsed = time.monotonic() - started
-        if elapsed < min_time_in_card:
-            wait_left = min_time_in_card - elapsed
-            log.debug(
-                f"Действия заняли {elapsed:.1f} с — ждём ещё {wait_left:.1f} с, чтобы достичь {min_time_in_card} с")
-            await self.page.wait_for_timeout(wait_left * 1000)
-        else:
-            log.debug(f"Действия заняли {elapsed:.1f} с — лимит {min_time_in_card} с уже перекрыт, завершаю")
+                log.debug(f"Действия заняли {elapsed:.1f} с — лимит {min_time_in_card} с перекрыт")
+            return True, "Действия завершены успешно"
+        except Exception as e:
+            log.exception("Ошибка в perform_random_action:")
+            return False, f"Ошибка при выполнении действй в perform_random_action: {e}"

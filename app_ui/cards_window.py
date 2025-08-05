@@ -1,6 +1,9 @@
 import logging
 import tkinter as tk
 from tkinter import messagebox
+
+from app_ui.license_window import LicenseWindow
+from app_utils.subscription import SubscriptionChecker
 from app_utils.utils import CARDS_FILE
 from app_utils.storage import JsonStore
 
@@ -58,7 +61,10 @@ class CardSettingsWindow(tk.Toplevel):
             messagebox.showerror("Ошибка", "Время должно быть числом"); return
         if t < 45:
             messagebox.showerror("Ошибка", "Время не должно быть менее 45 секунд"); return
-        self.settings.update(vals); self.settings["click_phone"] = self.var_click.get()
+        self.settings["name"] = vals["name"]
+        self.settings["city"] = vals["city"]
+        self.settings["time_in_card"] = int(vals["time_in_card"])
+        self.settings["click_phone"] = self.var_click.get()
         if self.on_create:
             self.withdraw()
             def _on_kw_saved():
@@ -71,8 +77,13 @@ class CardSettingsWindow(tk.Toplevel):
             self.destroy()
 
 class CardsManagerWindow(tk.Toplevel):
-    def __init__(self, parent: tk.Tk):
+    def __init__(self, parent: tk.Tk, test=False):
         super().__init__(parent)
+        self.test = test
+        status, _ = SubscriptionChecker(test=self.test).status()
+        if status != "Активна":
+            LicenseWindow(self, lambda: CardsManagerWindow(parent, test=self.test))
+            return
         self.title("Управление карточками")
         self.geometry("300x330")
         self.store = JsonStore(CARDS_FILE)
