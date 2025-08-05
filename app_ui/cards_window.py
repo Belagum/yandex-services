@@ -35,22 +35,23 @@ class CardSettingsWindow(tk.Toplevel):
         self.store, self.cards, self.card_name, self.on_create = store, cards, card_name, on_create
         self.settings = self.cards.setdefault(card_name, {}).setdefault("settings", {})
         self.title(f'{"Создать" if on_create else "Настройки"}: {card_name}')
-        self.geometry("300x200")
-        self.columnconfigure(1, weight=1)
+        self.geometry("300x230"); self.columnconfigure(1, weight=1)
 
         fields = [("Исполнитель", "name"), ("Город", "city"), ("Время в карточке, c", "time_in_card"), ("Количество повторений", "repeat_count")]
         self.vars: dict[str, tk.StringVar] = {}
+
         for i, (lbl, key) in enumerate(fields):
             tk.Label(self, text=lbl).grid(row=i, column=0, sticky="w", padx=10, pady=4)
             v = tk.StringVar(value=str(self.settings.get(key, "")))
             tk.Entry(self, textvariable=v).grid(row=i, column=1, sticky="ew", padx=10, pady=4)
             self.vars[key] = v
+        row = len(fields)
 
         self.var_click = tk.BooleanVar(value=self.settings.get("click_phone", False))
-        tk.Checkbutton(self, text="Нажимать телефон", variable=self.var_click)\
-            .grid(row=len(fields), column=0, columnspan=2, padx=10, pady=4, sticky="w")
-        tk.Button(self, text="Сохранить", command=self._save)\
-            .grid(row=len(fields) + 1, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
+        tk.Checkbutton(self, text="Нажимать телефон", variable=self.var_click).grid(row=row, column=0, columnspan=2, sticky="w", padx=10, pady=4)
+        self.var_proxy = tk.BooleanVar(value=self.settings.get("use_proxy", False))
+        tk.Checkbutton(self, text="Использовать прокси", variable=self.var_proxy).grid(row=row+1, column=0, columnspan=2, sticky="w", padx=10, pady=4)
+        tk.Button(self, text="Сохранить", command=self._save).grid(row=row+2, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
 
     def _save(self):
         vals = {k: v.get().strip() for k, v in self.vars.items()}
@@ -66,6 +67,8 @@ class CardSettingsWindow(tk.Toplevel):
         self.settings["repeat_count"] =  int(vals["repeat_count"])
         self.settings["time_in_card"] = int(vals["time_in_card"])
         self.settings["click_phone"] = self.var_click.get()
+        self.settings["use_proxy"] = self.var_proxy.get()
+
         if self.on_create:
             self.withdraw()
             def _on_kw_saved():

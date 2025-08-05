@@ -15,6 +15,7 @@ class Runner:
     def __init__(self, names: list[str], headless: bool, threads: int, position: bool, infinity: bool):
         data = JsonStore(CARDS_FILE).load()
         self.cfgs = [CardConfig.from_raw(n, data[n]) for n in names if n in data]
+        self.proxies: list[dict] = JsonStore(utils.PROXIES_FILE).load() or []
         self.headless, self.position, self.infinity = map(bool, (headless, position, infinity))
         self.threads = max(1, min(threads, 15))
         self._writer = StatsWriter("stats.txt")
@@ -34,8 +35,8 @@ class Runner:
                 for _ in range(c.repeat_count):
                     yield c, random.choice(c.keywords)
 
-    async def _do_one(self, cfg: CardConfig, kw: str) -> bool:
-        async with BrowserSession(headless=self.headless) as page:
+    async def _do_one(self, cfg: CardConfig, kw: str, proxy: dict | None):
+        async with BrowserSession(headless=self.headless, proxy=proxy) as page:
             svc = YandexService(page, YandexServicesCfg(
                 name=cfg.executor, city=cfg.city, time_in_card=cfg.time_in_card,
                 click_phone=cfg.click_phone, keyword=f"{kw} {cfg.city} Яндекс услуги"))
@@ -49,15 +50,14 @@ class Runner:
             return ok
 
     def _run_task(self, cfg_kw: tuple[CardConfig, str]):
-        cfg, kw = cfg_kw
-        t0 = time.time()
+        cfg, kw = cfg_kw; t0 = time.time(); proxy = None
+        if cfg.use_proxy and cfg.proxy_idx:
+            candidates = [self.proxies[i] for i in cfg.proxy_idx if i < len(self.proxies)]
+            if candidates: proxy = random.choice(candidates)
         ok = False
-        try:
-            ok = asyncio.run(self._do_one(cfg, kw))
-        except Exception as e:
-            log.exception(e)
-        finally:
-            self._stats.update(cfg.name, ok, time.time() - t0)
+        try: ok = asyncio.run(self._do_one(cfg, kw, proxy))
+        except Exception as e: log.exception(e)
+        finally: self._stats.update(cfg.name, ok, time.time() - t0)
 
     def stats_str(self) -> str: return self._stats.dump()
 
