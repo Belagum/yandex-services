@@ -1,4 +1,5 @@
 import random
+import time
 from dataclasses import dataclass, field
 import logging
 from patchright.async_api import Page
@@ -45,6 +46,12 @@ class YandexServicesCfg:
     min_photo_view: int = 1
     max_photo_view: int = 5
     phone_btn: str = 'a.Link.PhoneLoader-Link button.PhoneLoader-Button'
+    click_yes_in_phone: float = 0.33
+    min_wait_in_phone: int = 7
+    max_wait_in_phone: int = 15
+    phone_yes_btn: str = 'div.PhoneFeedbackForm-Buttons button:not(.PhoneFeedbackForm-NoButton)'
+    close_phone_btn: str = 'div.YdoModal-BackButton'
+
     popups: list[str] = field(default_factory=lambda: [
         'button.Distribution-ButtonClose',
         'button[title="Нет, спасибо"]'
@@ -138,9 +145,9 @@ class YandexService(BaseHelper, RandomActionsMixin):
             total = await loc.count()
             if misses < total:
                 el = loc.nth(misses)
-                text = (await el.text_content() or "").split("\n", 1)[0].strip()
+                text = (await el.text_content() or "").partition("\n")[0].strip()
                 sim = SequenceMatcher(None, text, name).ratio()
-                log.debug(f"#{misses + 1}: '{text}' ~ '{name}' → {sim:.2f}")
+                log.debug(f"#{misses + 1}: {text!r} ~ {name!r} → {sim:.2f}")
 
                 if sim >= sim_threshold:
                     waiter = self.page.context.wait_for_event("page")
@@ -159,3 +166,41 @@ class YandexService(BaseHelper, RandomActionsMixin):
 
         log.error(f"'{name}' не найден (проверено {misses} карточек)")
         return False, "Исполнитель не найден"
+
+    async def perform_random_action(self, *, click_phone: bool = False, min_time_in_card: int = 45) -> None:
+        started = time.monotonic()
+
+        actions = (
+            (self.click_random_photos, "фото"),
+            (self.click_random_services, "услуг"),
+            (self.click_random_examples, "примеров"),
+        )
+
+        for coro, title in actions:
+            if random.random() < 0.5:
+                log.debug(f"Запускаю действие: {title}")
+                await coro()
+            else:
+                log.debug(f"Пропускаю действие: {title}")
+
+        if click_phone and await self.is_present(self.config.phone_btn):
+            await self.click(self.config.phone_btn, index=0)
+            log.debug("Кликнул кнопку «Телефон»")
+
+            if random.random() < self.config.click_yes_in_phone:
+                await self.page.wait_for_timeout(
+                    random.randint(self.config.min_wait_in_phone, self.config.max_wait_in_phone) * 1000
+                )
+                if await self.is_present(self.config.phone_yes_btn):
+                    await self.click(self.config.phone_yes_btn)
+                    log.debug("Кликнул кнопку «Да» после показа телефона")
+                await self.click(self.config.close_phone_btn)
+
+        elapsed = time.monotonic() - started
+        if elapsed < min_time_in_card:
+            wait_left = min_time_in_card - elapsed
+            log.debug(
+                f"Действия заняли {elapsed:.1f} с — ждём ещё {wait_left:.1f} с, чтобы достичь {min_time_in_card} с")
+            await self.page.wait_for_timeout(wait_left * 1000)
+        else:
+            log.debug(f"Действия заняли {elapsed:.1f} с — лимит {min_time_in_card} с уже перекрыт, завершаю")
