@@ -18,10 +18,17 @@ class YandexServicesCfg:
     results_selector: str = 'ul.serp-list'
     link_selector_tpl: str = "a[href*='{fragment}']"
     services_search_input: str = 'input.Textinput-Control[name="text"][placeholder="Чем вам помочь?"]'
-    services_name_a: str = 'a.Link.WorkerCard-Title'
+    services_name_executor_a: str = 'a.Link.WorkerCard-Title'
     search_btn = 'a[aria-label=Мессенджер]'
+    photo_a = 'a.Link.PhotoGallery-Image'
+    service_name_a = 'div.ProfileServiceCard-MainLeft a.Link'
+    expand_services_btn = 'div.SpecializationCard-CollapsibleList a.Link'
     min_wait_after_verify_city: int = 3
     max_wait_after_verify_city: int = 6
+    block_chance: float = 0.5
+    min_photo_view: int = 1
+    max_photo_view: int = 5
+    phone_btn: str = 'a.Link.PhoneLoader-Link button.PhoneLoader-Button'
     popups: list[str] = field(default_factory=lambda: [
         'button.Distribution-ButtonClose',
         'button[title="Нет, спасибо"]'
@@ -107,7 +114,7 @@ class YandexService(BaseHelper):
             return False, f"Ошибка: {e}"
 
     async def find_executor(self, name: str, *, max_miss: int = 10, sim_threshold: float = 0.85) -> tuple[bool, str]:
-        loc = self.page.locator(self.config.services_name_a)
+        loc = self.page.locator(self.config.services_name_executor_a)
         misses = 0
         log.debug(f"start search: '{name}'")
 
