@@ -46,13 +46,14 @@ class _StatsWriter:
 
 
 class Runner:
-    def __init__(self, names: list[str], headless: bool, threads: int, position: bool):
+    def __init__(self, names: list[str], headless: bool, threads: int, position: bool, infinity: bool):
         data = JsonStore(CARDS_FILE).load()
         self.configs: list[CardConfig] = [
             CardConfig.from_raw(n, data[n]) for n in names if n in data
         ]
         self.headless = bool(headless)
         self.position = bool(position)
+        self.infinity = bool(infinity)
         self.threads = max(1, min(threads, 15))
         self._writer = _StatsWriter("stats.txt")
 
@@ -97,16 +98,26 @@ class Runner:
             if not cfg.keywords:
                 self._writer.write(f"{cfg.name}: skipped, no keywords")
                 continue
-            for _ in range(cfg.repeat_count):
+            count = 1 if self.infinity else cfg.repeat_count
+            for _ in range(count):
                 yield cfg, random.choice(cfg.keywords)
 
     def _job(self, cfg: CardConfig, kw: str):
         asyncio.run(self._handle_one(cfg, kw))
 
     def run(self):
-        tasks = list(self._task_args())
-        if not tasks:
-            log.warning("No tasks to run")
-            return
-        with cf.ThreadPoolExecutor(min(self.threads, len(tasks))) as ex:
-            ex.map(lambda args: self._job(*args), tasks)
+        if self.infinity:
+            while True:
+                tasks = list(self._task_args())
+                if not tasks:
+                    log.warning("No valid tasks to run (infinity mode)")
+                    return
+                with cf.ThreadPoolExecutor(min(self.threads, len(tasks))) as ex:
+                    ex.map(lambda args: self._job(*args), tasks)
+        else:
+            tasks = list(self._task_args())
+            if not tasks:
+                log.warning("No tasks to run")
+                return
+            with cf.ThreadPoolExecutor(min(self.threads, len(tasks))) as ex:
+                ex.map(lambda args: self._job(*args), tasks)

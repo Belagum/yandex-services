@@ -30,6 +30,8 @@ class RunWindow(tk.Toplevel):
         f = tk.Frame(self); f.pack(fill="x", padx=10)
         self.var_headless = tk.BooleanVar()
         self.var_position = tk.BooleanVar()
+        self.var_infinity = tk.BooleanVar()
+        tk.Checkbutton(f, text="Бесконечно проходить по карточкам", variable=self.var_infinity).pack(anchor="w", pady=(0, 5))
         tk.Checkbutton(f, text="Режим сбора позиций", variable=self.var_position).pack(anchor="w", pady=(0, 5))
         tk.Checkbutton(f, text="Headless", variable=self.var_headless).pack(anchor="w", pady=(0, 5))
         tk.Label(f, text="Потоки").pack(anchor="w")
@@ -54,7 +56,8 @@ class RunWindow(tk.Toplevel):
             cards=sel,
             headless=self.var_headless.get(),
             threads=self.var_threads.get(),
-            position=self.var_position.get()
+            position=self.var_position.get(),
+            infinity=self.var_infinity.get()
         )
         log.info(f"Запуск: {params}")
 
@@ -65,7 +68,8 @@ class RunWindow(tk.Toplevel):
                 sel,
                 self.var_headless.get(),
                 self.var_threads.get(),
-                self.var_position.get()
+                self.var_position.get(),
+                self.var_infinity.get()
             ).run()
 
         threading.Thread(target=_bg, daemon=True).start()
