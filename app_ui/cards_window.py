@@ -35,7 +35,7 @@ class CardSettingsWindow(tk.Toplevel):
         self.geometry("260x160")
         self.columnconfigure(1, weight=1)
 
-        fields = [("Исполнитель", "name"), ("Город", "city"), ("Время в карточке, c", "time_on_card")]
+        fields = [("Исполнитель", "name"), ("Город", "city"), ("Время в карточке, c", "time_in_card")]
         self.vars: dict[str, tk.StringVar] = {}
         for i, (lbl, key) in enumerate(fields):
             tk.Label(self, text=lbl).grid(row=i, column=0, sticky="w", padx=10, pady=4)
@@ -53,7 +53,7 @@ class CardSettingsWindow(tk.Toplevel):
         vals = {k: v.get().strip() for k, v in self.vars.items()}
         if "" in vals.values():
             messagebox.showerror("Ошибка", "Все поля должны быть заполнены"); return
-        try: t = int(vals["time_on_card"])
+        try: t = int(vals["time_in_card"])
         except ValueError:
             messagebox.showerror("Ошибка", "Время должно быть числом"); return
         if t < 45:
