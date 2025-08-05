@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import logging
 from patchright.async_api import Page
 
-from helpers.BaseHelper import BaseHelper
+from yandex_flow.helpers.BaseHelper import BaseHelper
 from yandex_flow.helpers.CaptchaHelper import CaptchaHelper
 from difflib import SequenceMatcher
 
@@ -14,6 +14,12 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class YandexServicesCfg:
+    name: str = ""
+    city: str = ""
+    time_in_card: int = 45
+    click_phone: bool = False
+    keyword: str = ""
+
     url: str = 'https://ya.ru/'
     timeout: int = 30000
     search_input: str = '#text'
@@ -45,16 +51,16 @@ class YandexServicesCfg:
     block_chance: float = 0.5
     min_photo_view: int = 1
     max_photo_view: int = 5
-    phone_btn: str = 'a.Link.PhoneLoader-Link button.PhoneLoader-Button'
+    phone_btn: str = 'button:has-text("Телефон")'
     click_yes_in_phone: float = 0.33
     min_wait_in_phone: int = 7
     max_wait_in_phone: int = 15
-    phone_yes_btn: str = 'div.PhoneFeedbackForm-Buttons button:not(.PhoneFeedbackForm-NoButton)'
+    phone_yes_btn: str = 'button:has-text("Да")'
     close_phone_btn: str = 'div.YdoModal-BackButton'
 
     popups: list[str] = field(default_factory=lambda: [
         'button.Distribution-ButtonClose',
-        'button[title="Нет, спасибо"]'
+        'button.Distribution-ButtonClose[title="Нет, спасибо"]'
     ])
 
 class YandexService(BaseHelper, RandomActionsMixin):
@@ -102,11 +108,11 @@ class YandexService(BaseHelper, RandomActionsMixin):
     async def open_page(self) -> None:
         await self.page.goto(self.config.url, timeout=self.config.timeout, wait_until='domcontentloaded')
 
-    async def search(self, query: str) -> tuple[bool, str]:
+    async def search(self) -> tuple[bool, str]:
         try:
             await self.open_page()
             await self.close_popups()
-            await self.fill(self.config.search_input, query, press_enter=True)
+            await self.fill(self.config.search_input, self.config.keyword, press_enter=True)
             await self.solve_captcha()
             await self.close_popups()
             await self.page.wait_for_selector(self.config.results_selector, timeout=self.config.timeout)
@@ -125,17 +131,17 @@ class YandexService(BaseHelper, RandomActionsMixin):
             log.exception(f"Ошибка в методе search:")
             return False, f"Ошибка при поиске: {e}"
 
-    async def verify_city(self, city: str) -> tuple[bool, str]:
+    async def verify_city(self) -> tuple[bool, str]:
         try:
             locator = self.page.locator(self.config.city_div)
             await locator.first.wait_for(timeout=12_000)
             total = await locator.count()
             sample = min(5, total)
             matches = 0
-            log.debug(f"Город '{city}' | найдено {total} блоков, анализирую {sample}")
+            log.debug(f"Город '{self.config.city}' | найдено {total} блоков, анализирую {sample}")
             for i in range(sample):
                 txt = (await locator.nth(i).inner_text()).strip()
-                sim = SequenceMatcher(None, txt, city).ratio()
+                sim = SequenceMatcher(None, txt, self.config.city).ratio()
                 log.debug(f"#{i + 1}: '{txt}' — сходство {sim:.2f}")
                 if sim >= 0.7:
                     matches += 1
@@ -146,7 +152,7 @@ class YandexService(BaseHelper, RandomActionsMixin):
             log.info("Город не совпал, уточняю запрос")
             await self.fill(
                 selector=self.config.services_search_input,
-                text=city,
+                text=self.config.city,
                 append=True,
                 press_enter=True,
             )
@@ -156,19 +162,19 @@ class YandexService(BaseHelper, RandomActionsMixin):
             log.exception(f"Ошибка в verify_city:")
             return False, f"Ошибка в проверке города: {e}"
 
-    async def find_executor(self, name: str, *, max_miss: int = 10, sim_threshold: float = 0.85) -> tuple[bool, str]:
+    async def find_executor(self, *, max_miss: int = 10, sim_threshold: float = 0.85) -> tuple[bool, str]:
         try:
             loc = self.page.locator(self.config.services_name_executor_a)
             misses = 0
-            log.debug(f"start search: '{name}'")
+            log.debug(f"start search: '{self.config.name}'")
 
             while misses < max_miss:
                 total = await loc.count()
                 if misses < total:
                     el = loc.nth(misses)
                     text = (await el.text_content() or "").partition("\n")[0].strip() # type: ignore
-                    sim = SequenceMatcher(None, text, name).ratio()
-                    log.debug(f"#{misses + 1}: {text!r} ~ {name!r} → {sim:.2f}")
+                    sim = SequenceMatcher(None, text, self.config.name).ratio()
+                    log.debug(f"#{misses + 1}: {text!r} ~ {self.config.name!r} → {sim:.2f}")
 
                     if sim >= sim_threshold:
                         waiter = self.page.context.wait_for_event("page")
@@ -176,7 +182,7 @@ class YandexService(BaseHelper, RandomActionsMixin):
                         new_page = await waiter
                         await new_page.wait_for_load_state("domcontentloaded", timeout=self.config.timeout)
                         self.update_page(new_page)
-                        log.info(f"'{name}' найден и открыт")
+                        log.info(f"'{self.config.name}' найден и открыт")
                         return True, "Исполнитель найден"
 
                     misses += 1
@@ -185,13 +191,13 @@ class YandexService(BaseHelper, RandomActionsMixin):
                     await self.page.mouse.wheel(0, 1200)
                     await self.page.wait_for_timeout(500)
 
-            log.error(f"'{name}' не найден (проверено {misses} карточек)")
+            log.error(f"'{self.config.name}' не найден (проверено {misses} карточек)")
             return False, "Исполнитель не найден"
         except Exception as e:
             log.exception("Ошибка в find_executor:")
             return False, f"Ошибка в поиске исполнителя: {e}"
 
-    async def perform_random_action(self, *, click_phone: bool = False, min_time_in_card: int = 45) -> tuple[bool, str]:
+    async def perform_random_action(self) -> tuple[bool, str]:
         try:
             started = time.monotonic()
             actions = (
@@ -205,24 +211,25 @@ class YandexService(BaseHelper, RandomActionsMixin):
                     await coro()
                 else:
                     log.debug(f"Пропускаю действие: {title}")
-            if click_phone and await self.is_present(self.config.phone_btn):
-                await self.click(self.config.phone_btn, index=0)
+
+            if self.config.click_phone and await self.is_present(self.config.phone_btn):
+                await self.click(self.config.phone_btn)
                 log.debug("Кликнул кнопку «Телефон»")
+                await self.page.wait_for_timeout(
+                    random.randint(self.config.min_wait_in_phone, self.config.max_wait_in_phone) * 1000
+                )
                 if random.random() < self.config.click_yes_in_phone:
-                    await self.page.wait_for_timeout(
-                        random.randint(self.config.min_wait_in_phone, self.config.max_wait_in_phone) * 1000
-                    )
                     if await self.is_present(self.config.phone_yes_btn):
-                        await self.click(self.config.phone_yes_btn)
+                        await self.page.click(self.config.phone_yes_btn)
                         log.debug("Кликнул кнопку «Да» после показа телефона")
                 await self.click(self.config.close_phone_btn)
             elapsed = time.monotonic() - started
-            if elapsed < min_time_in_card:
-                wait_left = min_time_in_card - elapsed
+            if elapsed < self.config.time_in_card:
+                wait_left = self.config.time_in_card - elapsed
                 log.debug(f"Действия заняли {elapsed:.1f} с — ждём ещё {wait_left:.1f} с")
                 await self.page.wait_for_timeout(wait_left * 1000)
             else:
-                log.debug(f"Действия заняли {elapsed:.1f} с — лимит {min_time_in_card} с перекрыт")
+                log.debug(f"Действия заняли {elapsed:.1f} с — лимит {self.config.time_in_card} с перекрыт")
             return True, "Действия завершены успешно"
         except Exception as e:
             log.exception("Ошибка в perform_random_action:")

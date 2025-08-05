@@ -31,11 +31,11 @@ class CaptchaHelper(BaseHelper):
 
     def __init__(self, page):
         super().__init__(page)
-        cfg = JsonStore(SETTINGS_FILE).load()
+        cfg_all  = JsonStore(SETTINGS_FILE).load()
+        cfg = cfg_all.get("captcha", {})
         self.api_2captcha = cfg.get("2captcha_api_key")
         self.api_capsola = cfg.get("capsola_api_key")
         raw = (cfg.get("captcha_service") or "").lower().strip()
-        print(raw)
         for svc in (raw, "capsola", "2captcha"):
             if getattr(self, f"api_{svc}", None):
                 self.solver = svc
@@ -44,26 +44,27 @@ class CaptchaHelper(BaseHelper):
             self.solver = None
 
     async def solve(self) -> None:
-        if not await self._detect_any():
-            return
-
-        if not self.solver:
-            raise RuntimeError("No captcha solver configured")
-
-        for _ in range(6):
+        if not await self._detect_any(): return
+        if not self.solver: raise RuntimeError("No captcha solver configured")
+        rounds = 3
+        for _ in range(rounds):
             if await self._try_checkbox():
-                return
-
-            solved, msg = await self._solve_advanced()
-            if solved is None:  # капча пропала — перезагружаемся и пробуем снова
-                await self.page.reload(wait_until="domcontentloaded")
-                await self.page.wait_for_timeout(5_000)
+                if not await self._detect_any(): return
                 continue
-            if solved:
-                return
-            raise Exception(f"captcha solve error: {msg}")
-
-        raise Exception("captcha could not be solved (6 attempts)")
+            for _ in range(6):
+                solved, msg = await self._solve_advanced()
+                if solved is None:
+                    await self.page.reload(wait_until="domcontentloaded")
+                    await self.page.wait_for_timeout(5_000)
+                    await self.click(self.LOC_CHECKBOX_BTN)
+                    continue
+                if solved:
+                    break
+                raise Exception(f"captcha solve error: {msg}")
+            else:
+                raise Exception("captcha could not be solved (6 attempts)")
+            if not await self._detect_any(): return
+        raise Exception(f"captcha reappeared after {rounds} solves")
 
     async def _detect_any(self) -> bool:
         for x in (

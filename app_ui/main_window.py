@@ -38,7 +38,7 @@ class MainWindow(tk.Toplevel):
 
     def _open_cards(self):
         if SubscriptionChecker(test=self.test).status()[0] == "Активна":
-            CardsManagerWindow(self)
+            CardsManagerWindow(self, test=self.test)
         else:
             LicenseWindow(self, lambda: CardsManagerWindow(self))
 
@@ -48,7 +48,6 @@ class MainWindow(tk.Toplevel):
 
     def _build_version(self):
         tk.Label(self, text=version).pack(side='bottom', fill='x', pady=5)
-
 
 def run_app(test=False):
     log.info(f"Запуск приложения, test={test}")

@@ -1,4 +1,5 @@
 import logging, tkinter as tk
+import threading
 from tkinter import messagebox
 
 from app_ui.license_window import LicenseWindow
@@ -44,8 +45,15 @@ class RunWindow(tk.Toplevel):
             return
         sel = [n for n, v in self.card_vars.items() if v.get()]
         if not sel:
-            messagebox.showerror("Ошибка", "Не выбрана ни одна карточка"); return
+            messagebox.showerror("Ошибка", "Не выбрана ни одна карточка");
+            return
+
         params = dict(cards=sel, headless=self.var_headless.get(), threads=self.var_threads.get())
         log.info(f"Запуск: {params}")
-        Runner(sel, self.var_headless.get(), self.var_threads.get()).run()
+
         self.destroy()
+
+        def _bg():
+            Runner(sel, self.var_headless.get(), self.var_threads.get()).run()
+
+        threading.Thread(target=_bg, daemon=True).start()

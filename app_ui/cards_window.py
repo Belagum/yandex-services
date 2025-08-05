@@ -35,10 +35,10 @@ class CardSettingsWindow(tk.Toplevel):
         self.store, self.cards, self.card_name, self.on_create = store, cards, card_name, on_create
         self.settings = self.cards.setdefault(card_name, {}).setdefault("settings", {})
         self.title(f'{"Создать" if on_create else "Настройки"}: {card_name}')
-        self.geometry("260x160")
+        self.geometry("300x200")
         self.columnconfigure(1, weight=1)
 
-        fields = [("Исполнитель", "name"), ("Город", "city"), ("Время в карточке, c", "time_in_card")]
+        fields = [("Исполнитель", "name"), ("Город", "city"), ("Время в карточке, c", "time_in_card"), ("Количество повторений", "repeat_count")]
         self.vars: dict[str, tk.StringVar] = {}
         for i, (lbl, key) in enumerate(fields):
             tk.Label(self, text=lbl).grid(row=i, column=0, sticky="w", padx=10, pady=4)
@@ -63,6 +63,7 @@ class CardSettingsWindow(tk.Toplevel):
             messagebox.showerror("Ошибка", "Время не должно быть менее 45 секунд"); return
         self.settings["name"] = vals["name"]
         self.settings["city"] = vals["city"]
+        self.settings["repeat_count"] =  int(vals["repeat_count"])
         self.settings["time_in_card"] = int(vals["time_in_card"])
         self.settings["click_phone"] = self.var_click.get()
         if self.on_create:

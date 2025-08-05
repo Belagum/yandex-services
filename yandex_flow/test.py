@@ -9,11 +9,10 @@ async def main():
     async with BrowserSession() as page:
         config = YandexServicesCfg()
         service = YandexService(page, config)
-        query = "москва сантехник" + " Яндекс услуги "
-        await service.search(query=query)
-        await service.verify_city(city="иваново")
-        await service.find_executor(name="Николай С.")
-        await service.perform_random_action(click_phone=True)
+        await service.search()
+        await service.verify_city()
+        await service.find_executor()
+        await service.perform_random_action()
         input()
 
 if __name__ == "__main__":
