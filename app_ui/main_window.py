@@ -24,20 +24,26 @@ class MainWindow(tk.Toplevel):
 
     def _build_buttons(self):
         frame = tk.Frame(self); frame.pack(expand=True, pady=5)
-        tk.Button(frame, text="Запустить", command=lambda: log.info("Нажата кнопка Запустить")).pack(pady=3, fill="x")
+        tk.Button(frame, text="Запустить", command=self._open_run).pack(pady=3, fill="x")
         tk.Button(frame, text="Управление карточками", command=self._open_cards).pack(pady=3, fill="x")
         tk.Button(frame, text="Решение капчи", command=self._open_captcha).pack(pady=3, fill="x")
+
+    def _open_run(self):
+        log.info("Открыто окно запуска")
+        from app_ui.run_window import RunWindow
+        RunWindow(self)
 
     def _open_captcha(self):
         log.info("Открыто окно решения капчи")
         CaptchaSettingsWindow(self)
 
-    def _build_version(self):
-        tk.Label(self, text=version).pack(side='bottom', fill='x', pady=5)
-
     def _open_cards(self):
         log.info("Открыто окно управления карточками")
         CardsManagerWindow(self)
+
+    def _build_version(self):
+        tk.Label(self, text=version).pack(side='bottom', fill='x', pady=5)
+
 
 def run_app(test=False):
     log.info(f"Запуск приложения, test={test}")
