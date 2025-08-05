@@ -13,6 +13,7 @@ log = logging.getLogger(__name__)
 class YandexServicesCfg:
     url: str = 'https://ya.ru/'
     timeout: int = 30000
+    search_input: str = '#text'
     service_fragment: str = 'uslugi.yandex.ru'
     city_div: str = "div[class*='WorkerGeo-Address']"
     results_selector: str = 'ul.serp-list'
@@ -21,9 +22,17 @@ class YandexServicesCfg:
     services_name_executor_a: str = 'a.Link.WorkerCard-Title'
     search_btn: str = 'a[aria-label=Мессенджер]'
     photo_a: str  = 'a.Link.PhotoGallery-Image'
+    next_photo_btn: str = 'div.MediaViewer-ButtonNext'
+    close_photo_btn: str = 'div.PhotoViewer-HeaderClose'
+    min_wait_in_photo: float = 0.7
+    max_wait_in_photo: float = 2.0
     service_name_a: str  = 'div.ProfileServiceCard-MainLeft a.Link'
     expand_services_btn: str  = 'div.SpecializationCard-CollapsibleList a.Link'
     close_service_windows_btn: str = 'div.YdoModal-BackButton'
+    examples_div: str = 'div.Scroller-Item > section.WorkerPortfolioViewer-Item'
+    close_example_btn: str = 'button.WorkerPortfolioInfo-Close'
+    min_wait_in_example: float = 1.5
+    max_wait_in_example: float = 2.5
     min_view_services: int = 2
     max_view_services: int = 5
     min_wait_before_close: float = 1.0
@@ -68,24 +77,24 @@ class YandexService(BaseHelper):
         try:
             await self.open_page()
             await self.close_popups()
-            await self.fill('#text', query, press_enter=True)
+            await self.fill(self.config.search_input, query, press_enter=True)
             await self.solve_captcha()
             await self.close_popups()
             await self.page.wait_for_selector(self.config.results_selector, timeout=self.config.timeout)
             selector = self.config.link_selector_tpl.format(fragment=self.config.service_fragment)
             link = await self.page.wait_for_selector(selector)
             if not link:
-                log.warning('Сайт Яндекс услуг не найден в выдаче')
-                return False, 'Сайт Яндекс услуг не найден в выдаче'
+                log.error("Сайт Яндекс услуг не найден в выдаче")
+                return False, "Сайт Яндекс услуг не найден в выдаче"
             waiter = self.page.context.wait_for_event('page')
             await self.click(link)
             new_page = await waiter
             await new_page.wait_for_load_state('domcontentloaded', timeout=self.config.timeout)
             self.update_page(new_page)
-            return True, 'Клик по нужному сайту выполнен'
+            return True, "Клик по нужному сайту выполнен"
         except Exception as e:
-            log.error('Ошибка в методе search: %s', e)
-            return False, 'Ошибка при поиске'
+            log.error(f"Ошибка в методе search: {e}")
+            return False, "Ошибка при поиске"
 
     async def verify_city(self, city: str) -> tuple[bool, str]:
         try:
@@ -146,28 +155,79 @@ class YandexService(BaseHelper):
                 await self.page.mouse.wheel(0, 1200)
                 await self.page.wait_for_timeout(500)
 
-        log.info(f"'{name}' не найден (проверено {misses} карточек)")
+        log.error(f"'{name}' не найден (проверено {misses} карточек)")
         return False, "Исполнитель не найден"
+
+    async def _click_random_items(
+            self,
+            item_selector: str,
+            close_selector: str,
+            *,
+            min_view: int,
+            max_view: int,
+            min_wait: int,
+            max_wait: int,
+            description: str
+    ) -> None:
+        locator = self.page.locator(item_selector)
+        total = await locator.count()
+        view_n = min(total, random.randint(min_view, max_view))
+        if view_n == 0:
+            log.error(f"Нет {description} для клика")
+            return
+
+        indices = random.sample(range(total), view_n)
+        log.debug(f"Кликаю по {view_n}/{total} {description}: {indices}")
+        for i, idx in enumerate(indices, 1):
+            await self.click(item_selector, index=idx)
+            delay = random.randint(min_wait, max_wait) * 1000
+            await self.page.wait_for_timeout(delay)
+            if await self.is_present(close_selector):
+                await self.click(close_selector)
+                log.debug(f"Закрыл {description} #{idx}")
+
+    async def _click_random_examples(self) -> None:
+        await self._click_random_items(
+            item_selector=self.config.examples_div,
+            close_selector=self.config.close_example_btn,
+            min_view=self.config.min_view_services,
+            max_view=self.config.max_view_services,
+            min_wait=self.config.min_wait_in_example,
+            max_wait=self.config.max_wait_in_example,
+            description="примеров работ"
+        )
 
     async def _click_random_services(self) -> None:
         if await self.is_present(self.config.expand_services_btn):
             await self.click(self.config.expand_services_btn)
             log.debug("Раскрыт список услуг")
+        await self._click_random_items(
+            item_selector=self.config.service_name_a,
+            close_selector=self.config.close_service_windows_btn,
+            min_view=self.config.min_view_services,
+            max_view=self.config.max_view_services,
+            min_wait=self.config.min_wait_before_close,
+            max_wait=self.config.max_wait_before_close,
+            description="услуг"
+        )
 
-        locator = self.page.locator(self.config.service_name_a)
-        total = await locator.count()
-        count = min(total, random.randint(self.config.min_view_services, self.config.max_view_services))
-        if not count:
-            log.debug("Нет услуг для клика")
-            return
+    async def _click_random_photos(self) -> None:
+        if await self.is_present(self.config.photo_a):
+            await self.click(self.config.photo_a)
+            log.debug("Открыта первая фотография")
 
-        indices = random.sample(range(total), count)
-        log.debug(f"Кликаю по {count}/{total} услугам: {indices}")
-        for idx in indices:
-            await self.click(self.config.service_name_a, index=idx)
-            await self.page.wait_for_timeout(
-                random.randint(self.config.min_wait_before_close, self.config.max_wait_before_close) * 1000
-            )
-            if await self.is_present(self.config.close_service_windows_btn):
-                await self.click(self.config.close_service_windows_btn)
-                log.debug(f"Закрыл услугу #{idx}")
+        count = random.randint(self.config.min_photo_view, self.config.max_photo_view)
+        log.debug(f"Буду пролистывать {count} фотографий")
+
+        for i in range(count):
+            delay = random.randint(self.config.min_wait_in_photo, self.config.max_wait_in_photo) * 1000
+            await self.page.wait_for_timeout(delay)
+            if not await self.is_present(self.config.next_photo_btn):
+                log.warning(f"Кнопка следующей фото не найдена на шаге {i + 1}")
+                break
+            await self.click(self.config.next_photo_btn)
+            log.debug(f"Перелистнута фотография #{i + 1}")
+
+        if await self.is_present(self.config.close_photo_btn):
+            await self.click(self.config.close_photo_btn)
+            log.debug("Закрыт просмотр фотографий")
