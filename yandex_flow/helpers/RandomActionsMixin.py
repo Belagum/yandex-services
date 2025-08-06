@@ -72,9 +72,16 @@ class RandomActionsMixin:
         for i in range(count):
             delay = random.uniform(self.actions_cfg.min_wait_in_photo, self.actions_cfg.max_wait_in_photo) * 1000
             await self.page.wait_for_timeout(delay)
+
             if not await self.is_present(self.actions_cfg.next_photo_btn):
                 log.warning(f"Кнопка следующей фото не найдена на шаге {i + 1}")
                 break
+
+            is_disabled = await self.page.locator(self.actions_cfg.next_photo_btn).get_attribute("class")
+            if "CircleButton_disabled" in is_disabled:
+                log.debug(f"Кнопка отключена на шаге {i + 1}")
+                break
+
             await self.click(self.actions_cfg.next_photo_btn)
             log.debug(f"Перелистнута фотография #{i + 1}")
 
