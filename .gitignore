@@ -9,6 +9,7 @@ __pycache__/
 env/
 venv/
 stats.txt
+cookies/
 
 # PyCharm / IDE
 .idea/

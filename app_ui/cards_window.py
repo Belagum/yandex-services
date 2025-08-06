@@ -1,10 +1,12 @@
 import logging
+import shutil
 import tkinter as tk
-from tkinter import messagebox
+from pathlib import Path
+from tkinter import messagebox, filedialog
 
 from app_ui.license_window import LicenseWindow
 from app_utils.subscription import SubscriptionChecker
-from app_utils.utils import CARDS_FILE
+from app_utils.utils import CARDS_FILE, COOKIES_DIR
 from app_utils.storage import JsonStore
 
 logger = logging.getLogger(__name__)
@@ -35,9 +37,13 @@ class CardSettingsWindow(tk.Toplevel):
         self.store, self.cards, self.card_name, self.on_create = store, cards, card_name, on_create
         self.settings = self.cards.setdefault(card_name, {}).setdefault("settings", {})
         self.title(f'{"Создать" if on_create else "Настройки"}: {card_name}')
-        self.geometry("300x230"); self.columnconfigure(1, weight=1)
 
-        fields = [("Исполнитель", "name"), ("Город", "city"), ("Время в карточке, c", "time_in_card"), ("Количество повторений", "repeat_count")]
+        self.columnconfigure(1, weight=1)
+
+        fields = [("Исполнитель", "name"),
+                  ("Город", "city"),
+                  ("Время в карточке, c", "time_in_card"),
+                  ("Количество повторений", "repeat_count")]
         self.vars: dict[str, tk.StringVar] = {}
 
         for i, (lbl, key) in enumerate(fields):
@@ -45,13 +51,32 @@ class CardSettingsWindow(tk.Toplevel):
             v = tk.StringVar(value=str(self.settings.get(key, "")))
             tk.Entry(self, textvariable=v).grid(row=i, column=1, sticky="ew", padx=10, pady=4)
             self.vars[key] = v
+
         row = len(fields)
 
         self.var_click = tk.BooleanVar(value=self.settings.get("click_phone", False))
-        tk.Checkbutton(self, text="Нажимать телефон", variable=self.var_click).grid(row=row, column=0, columnspan=2, sticky="w", padx=10, pady=4)
+        tk.Checkbutton(self, text="Нажимать телефон", variable=self.var_click)\
+            .grid(row=row, column=0, columnspan=2, sticky="w", padx=10, pady=4)
+        row += 1
+
         self.var_proxy = tk.BooleanVar(value=self.settings.get("use_proxy", False))
-        tk.Checkbutton(self, text="Использовать прокси", variable=self.var_proxy).grid(row=row+1, column=0, columnspan=2, sticky="w", padx=10, pady=4)
-        tk.Button(self, text="Сохранить", command=self._save).grid(row=row+2, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
+        tk.Checkbutton(self, text="Использовать прокси", variable=self.var_proxy)\
+            .grid(row=row, column=0, columnspan=2, sticky="w", padx=10, pady=4)
+        row += 1
+
+        tk.Button(self, text="Сохранить", command=self._save)\
+            .grid(row=row, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
+        row += 1
+
+        self.cookies_path = Path(COOKIES_DIR) / f"{card_name}_cookies.json"
+        self.btn_cookies = tk.Button(self,
+                                     text="Отвязать куки" if self.cookies_path.exists() else "Привязать куки",
+                                     command=self._toggle_cookies)
+        self.btn_cookies.grid(row=row, column=0, columnspan=2, sticky="ew", padx=10, pady=4)
+
+        self.update_idletasks()
+        self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())
+
 
     def _save(self):
         vals = {k: v.get().strip() for k, v in self.vars.items()}
@@ -79,6 +104,18 @@ class CardSettingsWindow(tk.Toplevel):
         else:
             self.store.save(self.cards)
             self.destroy()
+
+    def _toggle_cookies(self):
+        if self.cookies_path.exists():
+            self.cookies_path.unlink(missing_ok=True)
+            self.btn_cookies.config(text="Привязать куки")
+        else:
+            src = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
+            if not src:
+                return
+            Path(COOKIES_DIR).mkdir(exist_ok=True)
+            shutil.copy2(src, self.cookies_path)
+            self.btn_cookies.config(text="Отвязать куки")
 
 class CardsManagerWindow(tk.Toplevel):
     def __init__(self, parent: tk.Tk, test=False):

@@ -1,4 +1,5 @@
-import asyncio, concurrent.futures as cf, itertools, logging, random, time
+import asyncio, concurrent.futures as cf, itertools, logging, random, time, json
+from pathlib import Path
 from typing import Iterable
 import app_utils.utils as utils
 from app_utils.storage import JsonStore
@@ -35,8 +36,28 @@ class Runner:
                 for _ in range(c.repeat_count):
                     yield c, random.choice(c.keywords)
 
+    @staticmethod
+    def _load_cookies(card_name: str):
+        p = Path(utils.COOKIES_DIR) / f"{card_name}_cookies.json"
+        if not p.exists(): return None
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "cookies" in data: return data["cookies"]
+            if isinstance(data, list): return data
+        except Exception as e:
+            log.debug(f"cookies read error: {e}")
+        return None
+
     async def _do_one(self, cfg: CardConfig, kw: str, proxy: dict | None):
         async with BrowserSession(headless=self.headless, proxy=proxy) as page:
+            try:
+                cookies = self._load_cookies(cfg.name)
+                if cookies:
+                    ctx = getattr(page, "context", None)
+                    if ctx and hasattr(ctx, "add_cookies"):
+                        await ctx.add_cookies(cookies)
+            except Exception as e:
+                log.debug(f"cookies add error: {e}")
             svc = YandexService(page, YandexServicesCfg(
                 name=cfg.executor, city=cfg.city, time_in_card=cfg.time_in_card,
                 click_phone=cfg.click_phone, keyword=f"{kw} {cfg.city} Яндекс услуги"))
