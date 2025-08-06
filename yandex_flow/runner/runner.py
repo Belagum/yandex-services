@@ -13,16 +13,26 @@ from yandex_flow.start import BrowserSession
 log = logging.getLogger(__name__)
 
 class Runner:
-    def __init__(self, names: list[str], headless: bool, threads: int, position: bool, infinity: bool):
+    def __init__(self, names: list[str], headless: bool, threads: int, position: bool, infinity: bool, autorun=False, next_run=None):
         data = JsonStore(CARDS_FILE).load()
         self.cfgs = [CardConfig.from_raw(n, data[n]) for n in names if n in data]
         self.proxies: list[dict] = JsonStore(utils.PROXIES_FILE).load() or []
         self.headless, self.position, self.infinity = map(bool, (headless, position, infinity))
+        self.position = bool(position)
+        self._positions: dict[str, str] = {}      # keyword - position
         self.threads = max(1, min(threads, 15))
         self._writer = StatsWriter("stats.txt")
         self._stats = Stats(self.cfgs, self.threads, self.infinity)
+        self.autorun = autorun
+        self.next_run = next_run
+        self._stats = Stats(self.cfgs, self.threads, self.infinity, self.position, autorun, next_run)
 
     def _task_args(self) -> Iterable[tuple[CardConfig, str]]:
+        if self.position:
+            for c in self.cfgs:
+                for kw in c.keywords:
+                    yield c, kw
+            return
         if self.infinity:
             while True:
                 for c in self.cfgs:
@@ -50,24 +60,47 @@ class Runner:
 
     async def _do_one(self, cfg: CardConfig, kw: str, proxy: dict | None):
         async with BrowserSession(headless=self.headless, proxy=proxy) as page:
+            # куки
             try:
                 cookies = self._load_cookies(cfg.name)
-                if cookies:
-                    ctx = getattr(page, "context", None)
-                    if ctx and hasattr(ctx, "add_cookies"):
-                        await ctx.add_cookies(cookies)
+                ctx = getattr(page, "context", None)
+                if cookies and ctx and hasattr(ctx, "add_cookies"):
+                    await ctx.add_cookies(cookies)
             except Exception as e:
                 log.debug(f"cookies add error: {e}")
+
             svc = YandexService(page, YandexServicesCfg(
-                name=cfg.executor, city=cfg.city, time_in_card=cfg.time_in_card,
-                click_phone=cfg.click_phone, keyword=f"{kw} {cfg.city} Яндекс услуги"))
-            ok, msg = await svc.search();   log.debug(msg)
-            if not ok: return False
-            ok, msg = await svc.verify_city(); log.debug(msg)
-            if not ok: return False
-            ok, msg = await svc.find_executor()
-            if self.position or not ok: return ok
-            ok, msg = await svc.perform_random_action(); log.debug(msg)
+                name=cfg.executor,
+                city=cfg.city,
+                time_in_card=cfg.time_in_card,
+                click_phone=cfg.click_phone,
+                keyword=f"{kw} {cfg.city} Яндекс услуги"
+            ))
+
+            # поиск
+            ok, msg = await svc.search()
+            log.debug(msg)
+            if not ok:
+                return False
+
+            # проверка города
+            ok, msg = await svc.verify_city()
+            log.debug(msg)
+            if not ok:
+                return False
+
+            # поиск исоплнителя
+            ok, msg = await svc.find_executor(position=self.position)
+            log.debug(msg)
+            if self.position:
+                self._positions[kw] = msg
+                return ok
+            if not ok:
+                return ok
+
+            # рандом действия
+            ok, msg = await svc.perform_random_action()
+            log.debug(msg)
             return ok
 
     def _run_task(self, cfg_kw: tuple[CardConfig, str]):
@@ -88,18 +121,25 @@ class Runner:
             if self.infinity:
                 while True:
                     batch = list(itertools.islice(self._task_args(), self.threads))
-                    if not batch: break
+                    if not batch:
+                        break
                     with cf.ThreadPoolExecutor(self.threads) as ex:
                         ex.map(self._run_task, batch)
             else:
                 tasks = list(self._task_args())
-                if not tasks: return
+                if not tasks:
+                    return
                 with cf.ThreadPoolExecutor(min(self.threads, len(tasks))) as ex:
                     ex.map(self._run_task, tasks)
         finally:
             utils.current_runner = None
-            self._writer.write(
-                self._stats.dump() +
-                f"\nВремя окончания       : "
-                f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\n"
-            )
+            if self.position:
+                lines = ["=== Позиции ==="]
+                for kw, pos in self._positions.items():
+                    lines.append(f"{kw} - {pos}")
+                out = "\n".join(
+                    lines) + f"\nВремя окончания: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\n"
+            else:
+                out = self._stats.dump() + f"\nВремя окончания: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\n"
+            self._writer.write(out)
+

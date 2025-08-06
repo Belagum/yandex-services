@@ -177,7 +177,8 @@ class YandexService(BaseHelper, RandomActionsMixin):
             log.exception(f"Ошибка в verify_city:")
             return False, f"Ошибка в проверке города: {e}"
 
-    async def find_executor(self, *, max_miss: int = 10, sim_threshold: float = .85) -> tuple[bool, str]:
+    async def find_executor(self, *, max_miss: int = 10, sim_threshold: float = .85, position: bool = False) -> tuple[bool, str]:
+
         try:
             log.debug(f"Поиск исполнителя: '{self.config.name}'")
             loc = self.page.locator(self.config.services_name_executor_a)
@@ -200,6 +201,10 @@ class YandexService(BaseHelper, RandomActionsMixin):
                 if sim < sim_threshold:
                     misses += 1
                     continue
+
+                if position:
+                    log.info(f"Исполнитель найден на позиции {misses + 1} (режим сбора позиций)")
+                    return True, f"{misses + 1}"
 
                 competitors_cnt = min(
                     random.randint(self.config.min_competitor_view, self.config.max_competitor_view),

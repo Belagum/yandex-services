@@ -44,24 +44,39 @@ class RunWindow(tk.Toplevel):
             self.card_vars[name] = v
 
     def _build_opts(self):
-        f = tk.Frame(self); f.pack(fill="x", padx=10)
+        f = tk.Frame(self);
+        f.pack(fill="x", padx=10)
         self.var_headless = tk.BooleanVar()
         self.var_position = tk.BooleanVar()
         self.var_infinity = tk.BooleanVar()
         self.var_auto = tk.BooleanVar()
-        tk.Checkbutton(f, text="Бесконечно проходить по карточкам", variable=self.var_infinity).pack(anchor="w", pady=(0, 5))
-        tk.Checkbutton(f, text="Режим сбора позиций", variable=self.var_position).pack(anchor="w", pady=(0, 5))
+
+        def set_mode(mode):
+            self.var_infinity.set(mode == "infinity")
+            self.var_position.set(mode == "position")
+            self.var_auto.set(mode == "auto")
+            self._toggle_time()
+
+        tk.Checkbutton(f, text="Бесконечно проходить по карточкам", variable=self.var_infinity,
+                       command=lambda: set_mode("infinity")).pack(anchor="w", pady=(0, 5))
+        tk.Checkbutton(f, text="Режим сбора позиций", variable=self.var_position,
+                       command=lambda: set_mode("position")).pack(anchor="w", pady=(0, 5))
         tk.Checkbutton(f, text="Headless", variable=self.var_headless).pack(anchor="w", pady=(0, 5))
-        row = tk.Frame(f); row.pack(anchor="w", pady=(0, 5))
+
+        row = tk.Frame(f);
+        row.pack(anchor="w", pady=(0, 5))
         tk.Checkbutton(row, text="Автозапуск ежедневно в", variable=self.var_auto,
-                       command=self._toggle_time).pack(side="left")
-        self.entry_time = tk.Entry(row, width=5); self.entry_time.insert(0, "09:00")
-        self.entry_time.configure(state="disabled"); self.entry_time.pack(side="left", padx=5)
+                       command=lambda: set_mode("auto")).pack(side="left")
+        self.entry_time = tk.Entry(row, width=5);
+        self.entry_time.insert(0, "09:00")
+        self.entry_time.configure(state="disabled");
+        self.entry_time.pack(side="left", padx=5)
+
         tk.Label(f, text="Потоки").pack(anchor="w")
         self.var_threads = tk.IntVar(value=1)
         tk.Scale(f, from_=1, to=15, orient="horizontal", variable=self.var_threads).pack(fill="x")
 
-    def _toggle_time(self):  # enable / disable поле времени
+    def _toggle_time(self):
         self.entry_time.configure(state="normal" if self.var_auto.get() else "disabled")
 
     def _build_btns(self):
@@ -98,9 +113,10 @@ class RunWindow(tk.Toplevel):
                  f"'infinity': {self.var_infinity.get()}, 'autorun': {auto}, 'time': '{tstr}'}}")
         self.destroy()
 
-        def _once():
+        def _once(next_run=None):
             Runner(sel, self.var_headless.get(), self.var_threads.get(),
-                   self.var_position.get(), self.var_infinity.get()).run()
+                   self.var_position.get(), self.var_infinity.get(),
+                   autorun=auto, next_run=next_run).run()
 
         if not auto:
             threading.Thread(target=lambda: _once(), daemon=True).start(); return
@@ -117,9 +133,9 @@ class RunWindow(tk.Toplevel):
                 lt = time.localtime(now)
                 target = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, hh, mm, 0, 0, 0, -1))
                 if target <= now: target += 86400
-                utils.current_runner = _Dummy(target)        # показ в мониторинге
+                utils.current_runner = _Dummy(target)
                 time.sleep(max(0, target - time.time()))
-                utils.current_runner = None                  # освободить перед запуском
-                _once()
+                utils.current_runner = None
+                _once(target + 86400)
 
         threading.Thread(target=_scheduler, daemon=True).start()

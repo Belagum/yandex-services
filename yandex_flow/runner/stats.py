@@ -1,15 +1,31 @@
-import math, threading, time
+import math
+import threading
+import time
+
 from yandex_flow.runner.config import CardConfig
 
+
 class Stats:
-    def __init__(self, cfgs: list[CardConfig], threads: int, infinity: bool):
+    def __init__(self, cfgs: list[CardConfig], threads: int, infinity: bool, position: bool = False,
+                 autorun: bool = False, next_run: float | None = None):
         self._lock = threading.Lock()
-        self.map = {c.name: {"total": (-1 if infinity else c.repeat_count),
+        self.position = position
+        self.autorun = autorun
+        self.next_run = next_run
+        self.map = {c.name: {"total": (
+                                -1 if infinity else (
+                                    len(c.keywords) if position else c.repeat_count
+                                )),
                              "done": 0, "ok": 0} for c in cfgs}
         self.dur: list[float] = []
         self.start = time.time()
         self.threads, self.infinity = threads, infinity
-        self.total_kw = math.inf if infinity else sum(len(c.keywords) * c.repeat_count for c in cfgs)
+        if position:
+            self.total_kw = sum(len(c.keywords) for c in cfgs)
+        elif infinity:
+            self.total_kw = math.inf
+        else:
+            self.total_kw = sum(len(c.keywords) * c.repeat_count for c in cfgs)
 
     @staticmethod
     def _fmt(sec: float) -> str:
@@ -29,9 +45,18 @@ class Stats:
             left_time = math.inf if self.infinity else left / self.threads * avg
             run = time.time() - self.start
 
+            if getattr(self, "autorun", False) and getattr(self, "next_run", None):
+                mode = "авторежим"
+            elif self.position:
+                mode = "сбор позиций"
+            elif self.infinity:
+                mode = "бесконечный"
+            else:
+                mode = "обычный"
+
             head = [
                 f"Время запуска         : {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start))}",
-                f"Режим                 : {'бесконечный' if self.infinity else 'обычный'}",
+                f"Режим                 : {mode}",
                 f"Потоков в работе      : {self.threads}",
                 f"Карточек в работе     : {len(self.map)}",
                 f"Суммарный объём фраз  : {'∞' if self.infinity else self.total_kw}",
@@ -45,6 +70,6 @@ class Stats:
 
             w = max(map(len, self.map))
             body = [f"{'Имя':<{w}} | целевое/обработано/успешно"]
-            body += [f"{n:<{w}} | {'∞' if r['total']==-1 else r['total']}/{r['done']}/{r['ok']}"
+            body += [f"{n:<{w}} | {'∞' if r['total'] == -1 else r['total']}/{r['done']}/{r['ok']}"
                      for n, r in self.map.items()]
             return "\n".join(head + body)
