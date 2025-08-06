@@ -15,16 +15,17 @@ class MainWindow(tk.Toplevel):
     def __init__(self, parent, test=False):
         super().__init__(parent)
         self.test = test
-        sub_status, _ = SubscriptionChecker(test=test).status()
-        log.info(f"MainWindow открыто, статус подписки: {sub_status}")
+        status, end, _ = SubscriptionChecker(test=test).status()
+        log.info(f"MainWindow открыто, статус подписки: {status}, до {end}")
         self.title("Яндекс услуги")
         self.geometry("300x200")
-        self._build_status(sub_status)
+        self._build_status(status, end)
         self._build_buttons()
         self._build_version()
 
-    def _build_status(self, status_text):
-        tk.Label(self, text=f"Подписка: {status_text}").pack(pady=(5, 0), fill='x')
+    def _build_status(self, status_text: str, end_text: str):
+        tk.Label(self, text=f"Подписка: {status_text} до {end_text}")\
+            .pack(pady=(5, 0), fill='x')
 
     def _build_buttons(self):
         frame = tk.Frame(self); frame.pack(expand=True, pady=5)

@@ -43,7 +43,6 @@ class RunWindow(tk.Toplevel):
             tk.Checkbutton(inner, text=name, variable=v).pack(anchor="w")
             self.card_vars[name] = v
 
-
     def _build_opts(self):
         f = tk.Frame(self); f.pack(fill="x", padx=10)
         self.var_headless = tk.BooleanVar()
@@ -71,8 +70,15 @@ class RunWindow(tk.Toplevel):
         tk.Button(b, text="Старт", command=self._run).pack(fill="x")
 
     def _run(self):
-        if SubscriptionChecker(test=self.test).status()[0] != "Активна":
+        status, _, max_cards = SubscriptionChecker(test=self.test).status()
+        if status != "Активна":
             LicenseWindow(self, lambda: None); return
+        if max_cards != 0 and len(self.cards) > max_cards:
+            messagebox.showerror(
+                "Ошибка", f"Достигнут лимит по количеству карточек: {max_cards}\n"
+                          f"Сейчас: {len(self.cards)}"
+            )
+            return
 
         sel = [n for n, v in self.card_vars.items() if v.get()]
         if not sel:
@@ -84,7 +90,7 @@ class RunWindow(tk.Toplevel):
             try:
                 hh, mm = map(int, tstr.split(":"))
                 if not (0 <= hh < 24 and 0 <= mm < 60): raise ValueError
-            except Exception:
+            except ValueError:
                 messagebox.showerror("Ошибка", "Формат времени HH:MM"); return
 
         log.info(f"Запуск: {{'cards': sel, 'headless': {self.var_headless.get()}, "
@@ -102,7 +108,7 @@ class RunWindow(tk.Toplevel):
         def _scheduler():
             class _Dummy:
                 def __init__(self, ts): self.ts = ts
-                def stats_str(self):  # строка для MonitoringWindow
+                def stats_str(self):
                     return ("Авторежим             : включён\n"
                             f"Следующий автозапуск  : "
                             f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.ts))}")
@@ -114,6 +120,6 @@ class RunWindow(tk.Toplevel):
                 utils.current_runner = _Dummy(target)        # показ в мониторинге
                 time.sleep(max(0, target - time.time()))
                 utils.current_runner = None                  # освободить перед запуском
-                _once(target + 86400)
+                _once()
 
         threading.Thread(target=_scheduler, daemon=True).start()

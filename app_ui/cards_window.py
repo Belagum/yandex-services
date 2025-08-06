@@ -121,7 +121,8 @@ class CardsManagerWindow(tk.Toplevel):
     def __init__(self, parent: tk.Tk, test=False):
         super().__init__(parent)
         self.test = test
-        status, _ = SubscriptionChecker(test=self.test).status()
+        status, _, max_cards = SubscriptionChecker(test=self.test).status()
+        self.max_cards = max_cards
         if status != "Активна":
             LicenseWindow(self, lambda: CardsManagerWindow(parent, test=self.test))
             return
@@ -186,6 +187,10 @@ class CardsManagerWindow(tk.Toplevel):
         if any(name.lower() == n.lower() for n in self.cards):
             logger.error(f"Ошибка добавления: карточка '{name}' уже существует")
             messagebox.showerror("Ошибка", "Такая карточка уже существует")
+            return
+        if self.max_cards != 0 and len(self.cards) >= self.max_cards:
+            logger.error(f"Лимит карточек достигнут: {len(self.cards)} из {self.max_cards}")
+            messagebox.showerror("Ошибка", f"Достигнут лимит по количеству карточек: {self.max_cards}")
             return
         def _on_create(card_name):
             self.lb.insert(tk.END, card_name)
