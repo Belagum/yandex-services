@@ -59,6 +59,13 @@ class YandexServicesCfg:
     max_wait_in_phone: int = 15
     phone_yes_btn: str = 'button:has-text("Да")'
     close_phone_btn: str = 'div.YdoModal-BackButton'
+    video_div: str = 'div.Scroller-Item div.VideoViewer-Video_clickable a.VideoViewer-VideoLink'
+    close_video_btn: str ='div.YdoModal-BackButton.YdoModal-BackButton_position_narrow'
+    min_wait_in_video: int = 10
+    max_wait_in_video: int = 25
+    min_view_video: int = 1
+    max_view_video: int = 3
+
 
     popups: list[str] = field(default_factory=lambda: [
         'button.Distribution-ButtonClose',
@@ -88,6 +95,12 @@ class YandexService(BaseHelper, RandomActionsMixin):
             close_example_btn=config.close_example_btn,
             min_wait_in_example=config.min_wait_in_example,
             max_wait_in_example=config.max_wait_in_example,
+            video_div=self.config.video_div,
+            min_wait_in_video=self.config.min_wait_in_video,
+            max_wait_in_video=self.config.max_wait_in_video,
+            min_view_video=self.config.min_view_video,
+            max_view_video=self.config.max_view_video,
+            close_video_btn=self.config.close_video_btn,
         )
         self.solve_captcha = CaptchaHelper(page).solve
 
@@ -166,41 +179,62 @@ class YandexService(BaseHelper, RandomActionsMixin):
 
     async def find_executor(self, *, max_miss: int = 10, sim_threshold: float = .85) -> tuple[bool, str]:
         try:
-            loc, misses = self.page.locator(self.config.services_name_executor_a), 0
-            log.debug(f"start search: '{self.config.name}'")
+            log.debug(f"Поиск исполнителя: '{self.config.name}'")
+            loc = self.page.locator(self.config.services_name_executor_a)
+            initial = set(self.page.context.pages)
+            misses, total_clicked = 0, 0
+
             while misses < max_miss:
                 total = await loc.count()
-                if misses < total:
-                    el = loc.nth(misses)
-                    text = (await el.text_content() or "").partition("\n")[0].strip() # type: ignore
-                    sim = SequenceMatcher(None, text, self.config.name).ratio()
-                    log.debug(f"#{misses + 1}: {text!r} ~ {self.config.name!r} → {sim:.2f}")
-                    if sim >= sim_threshold:
-                        rnd = random.sample([i for i in range(total) if i != misses],
-                                            k=min(random.randint(self.config.min_competitor_view, self.config.max_competitor_view), max(0, total - 1)))
-                        for idx in rnd:
-                            waiter = self.page.context.wait_for_event("page")
-                            await self.click(loc.nth(idx))
-                            await (await waiter).wait_for_load_state("domcontentloaded",
-                                                                     timeout=self.config.timeout)
-                        waiter = self.page.context.wait_for_event("page")
-                        await self.click(el)
-                        new_page = await waiter
-                        await new_page.wait_for_load_state("domcontentloaded",
-                                                           timeout=self.config.timeout)
-                        self.update_page(new_page)
-                        log.info(f"'{self.config.name}' найден и открыт")
-                        return True, f"Исполнитель найден на позиции {misses + 1}"
-                    misses += 1
-                else:
-                    log.debug(f"просмотрено {misses} карточек, скроллю ниже…")
+                if misses >= total:
+                    log.debug(f"Просмотрено {misses} карточек, скроллю вниз")
                     await self.page.mouse.wheel(0, 1200)
                     await self.page.wait_for_timeout(500)
-            log.error(f"'{self.config.name}' не найден (проверено {misses} карточек)")
+                    continue
+
+                el = loc.nth(misses)
+                text = (await el.text_content() or "").partition("\n")[0].strip()
+                sim = SequenceMatcher(None, text, self.config.name).ratio()
+                log.debug(f"#{misses + 1}: '{text}' ~ '{self.config.name}' → {sim:.2f}")
+
+                if sim < sim_threshold:
+                    misses += 1
+                    continue
+
+                competitors_cnt = min(
+                    random.randint(self.config.min_competitor_view, self.config.max_competitor_view),
+                    max(0, total - 1)
+                )
+                rnd = random.sample([i for i in range(total) if i != misses], k=competitors_cnt)
+
+                for idx in rnd: # клик на конкурентов
+                    waiter = self.page.context.wait_for_event("page")
+                    log.debug(f"Открываю конкурента idx={idx}")
+                    await self.click(loc.nth(idx))
+                    page = await waiter
+                    await page.wait_for_load_state("domcontentloaded", timeout=self.config.timeout)
+                    total_clicked += 1
+
+                waiter = self.page.context.wait_for_event("page") # нужный исполнитель
+                log.info(f"Кликаю исполнителя idx={misses}")
+                await self.click(el)
+                target_page = await waiter
+                await target_page.wait_for_load_state("domcontentloaded", timeout=self.config.timeout)
+                self.update_page(target_page)
+
+                for p in list(self.page.context.pages):
+                    if p not in initial and p is not target_page:
+                        log.debug(f"Закрываю вкладку конкурента {p.url}")
+                        await p.close()
+
+                log.info(f"Исполнитель найден на позиции {misses + 1}, открыто {total_clicked} конкурентов")
+                return True, f"Исполнитель найден на позиции {misses + 1}"
+
+            log.warning(f"Исполнитель не найден после просмотра {misses} карточек")
             return False, "Исполнитель не найден"
         except Exception as e:
             log.exception("Ошибка в find_executor:")
-            return False, f"Ошибка в поиске исполнителя: {e}"
+            return False, f"Ошибка: {e}"
 
     async def perform_random_action(self) -> tuple[bool, str]:
         try:
@@ -209,9 +243,10 @@ class YandexService(BaseHelper, RandomActionsMixin):
                 (self.click_random_photos, "фото"),
                 (self.click_random_services, "услуг"),
                 (self.click_random_examples, "примеров"),
+                (self.click_random_videos, "видео")
             )
             for coro, title in actions:
-                if random.random() < 0.5:
+                if random.random() < self.config.block_chance:
                     log.debug(f"Запускаю действие: {title}")
                     await coro()
                 else:

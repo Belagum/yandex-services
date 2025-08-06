@@ -28,11 +28,20 @@ class RandomActionsCfg:
     min_wait_in_example: float
     max_wait_in_example: float
 
+    video_div: str
+    min_wait_in_video: int
+    max_wait_in_video: int
+    min_view_video: int
+    max_view_video: int
+    close_video_btn: str
+
+
 class RandomActionsMixin:
     page: Page
     click: Callable[..., Awaitable[Any]]
     actions_cfg: RandomActionsCfg
     is_present: Callable[..., Awaitable[bool]]
+    get_random_index: Callable[..., Awaitable[bool]]
 
     async def _click_random_items(
         self,
@@ -62,9 +71,10 @@ class RandomActionsMixin:
                 log.debug(f"Закрыл {description} #{idx}")
 
     async def click_random_photos(self) -> None:
-        if await self.is_present(self.actions_cfg.photo_a):
-            await self.click(self.actions_cfg.photo_a)
-            log.debug("Открыта первая фотография")
+        if not await self.is_present(self.actions_cfg.photo_a):
+            log.debug("Нет фотографий для просмотра, пропуск")
+            return
+        await self.click(self.actions_cfg.photo_a)
 
         count = random.randint(self.actions_cfg.min_photo_view, self.actions_cfg.max_photo_view)
         log.debug(f"Буду пролистывать {count} фотографий")
@@ -88,6 +98,30 @@ class RandomActionsMixin:
         if await self.is_present(self.actions_cfg.close_photo_btn):
             await self.click(self.actions_cfg.close_photo_btn)
             log.debug("Закрыт просмотр фотографий")
+
+    async def click_random_videos(self) -> None:
+        locator = self.page.locator(self.actions_cfg.video_div)
+        total = await locator.count()
+        if total == 0:
+            log.debug("Нет видео для клика")
+            return
+
+        max_count = min(total, self.actions_cfg.max_view_video)
+        min_count = min(self.actions_cfg.min_view_video, max_count)
+        count = random.randint(min_count, max_count)
+        log.debug(f"Буду пролистывать {count} видео из {total}")
+        clicked = set()
+        for _ in range(count):
+            choices = [i for i in range(total) if i not in clicked]
+            if not choices:
+                break
+            idx = random.choice(choices)
+            clicked.add(idx)
+            log.debug(f"Кликаю на видео индексом {idx}")
+            await self.click(self.actions_cfg.video_div, index=idx)
+            delay = random.randint(self.actions_cfg.min_wait_in_video, self.actions_cfg.max_wait_in_video) * 1000
+            await self.page.wait_for_timeout(delay)
+            await self.click(self.actions_cfg.close_video_btn)
 
     async def click_random_examples(self) -> None:
         await self._click_random_items(
