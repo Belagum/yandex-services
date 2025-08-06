@@ -18,15 +18,31 @@ class RunWindow(tk.Toplevel):
         self.test = test
         self.store = JsonStore(CARDS_FILE)
         self.cards = self.store.load()
-        self.title("Запуск"); self.geometry("300x400")
+        self.title("Запуск"); self.geometry("500x465")
         self._build_cards(); self._build_opts(); self._build_btns()
 
     def _build_cards(self):
-        box = tk.LabelFrame(self, text="Карточки"); box.pack(fill="both", expand=True, padx=10, pady=(10, 5))
+        box = tk.LabelFrame(self, text="Карточки", height=220); box.pack(fill="x", padx=10, pady=(10, 5))
+        box.pack_propagate(False)
+
+        canvas = tk.Canvas(box, highlightthickness=0); canvas.pack(side="left", fill="both", expand=True)
+        vsb = tk.Scrollbar(box, orient="vertical", command=canvas.yview); vsb.pack(side="right", fill="y")
+        canvas.configure(yscrollcommand=vsb.set)
+
+        inner = tk.Frame(canvas); canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        # прокрутка колёсиком прямо по списку
+        canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(-e.delta // 120, "units"))
+        canvas.bind("<Button-4>",  lambda e: canvas.yview_scroll(-1, "units"))  # Linux
+        canvas.bind("<Button-5>",  lambda e: canvas.yview_scroll( 1, "units"))
+
         self.card_vars: dict[str, tk.BooleanVar] = {}
         for name in self.cards:
-            v = tk.BooleanVar(); tk.Checkbutton(box, text=name, variable=v).pack(anchor="w")
+            v = tk.BooleanVar()
+            tk.Checkbutton(inner, text=name, variable=v).pack(anchor="w")
             self.card_vars[name] = v
+
 
     def _build_opts(self):
         f = tk.Frame(self); f.pack(fill="x", padx=10)
