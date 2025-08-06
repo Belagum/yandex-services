@@ -22,7 +22,7 @@ class SubscriptionChecker:
             return "Нет лицензии", now, 1
         try:
             log.debug(f"Запрос статуса подписки для ключа {key}")
-            r = requests.get(f"{API_URL}/check_subscription", params={"license_key": key}, timeout=8)
+            r = requests.get(f"{API_URL}/check_subscription_services", params={"license_key": key}, timeout=8)
             r.raise_for_status()
             data = r.json()
             active = bool(data.get("active"))

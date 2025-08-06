@@ -178,7 +178,6 @@ class YandexService(BaseHelper, RandomActionsMixin):
             return False, f"Ошибка в проверке города: {e}"
 
     async def find_executor(self, *, max_miss: int = 10, sim_threshold: float = .85, position: bool = False) -> tuple[bool, str]:
-
         try:
             log.debug(f"Поиск исполнителя: '{self.config.name}'")
             loc = self.page.locator(self.config.services_name_executor_a)

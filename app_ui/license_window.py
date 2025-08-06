@@ -26,7 +26,7 @@ class LicenseWindow(tk.Toplevel):
         self._validate()
 
     def _validate(self):
-        status, _ = self.checker.status()
+        status, _, _ = self.checker.status()
         log.debug(f"Результат проверки: {status}")
         self.msg.config(text="" if status == "Активна" else "Ключ неактивен")
         if status == "Активна":
