@@ -29,6 +29,8 @@ class YandexServicesCfg:
     link_selector_tpl: str = "a[href*='{fragment}']"
     services_search_input: str = 'input.Textinput-Control[name="text"][placeholder="Чем вам помочь?"]'
     services_name_executor_a: str = 'a.Link.WorkerCard-Title'
+    min_competitor_view: int = 1
+    max_competitor_view: int = 5
     search_btn: str = 'a[aria-label=Мессенджер]'
     photo_a: str  = 'a.Link.PhotoGallery-Image'
     next_photo_btn: str = 'div.MediaViewer-ButtonNext'
@@ -162,12 +164,10 @@ class YandexService(BaseHelper, RandomActionsMixin):
             log.exception(f"Ошибка в verify_city:")
             return False, f"Ошибка в проверке города: {e}"
 
-    async def find_executor(self, *, max_miss: int = 10, sim_threshold: float = 0.85) -> tuple[bool, str]:
+    async def find_executor(self, *, max_miss: int = 10, sim_threshold: float = .85) -> tuple[bool, str]:
         try:
-            loc = self.page.locator(self.config.services_name_executor_a)
-            misses = 0
+            loc, misses = self.page.locator(self.config.services_name_executor_a), 0
             log.debug(f"start search: '{self.config.name}'")
-
             while misses < max_miss:
                 total = await loc.count()
                 if misses < total:
@@ -175,22 +175,27 @@ class YandexService(BaseHelper, RandomActionsMixin):
                     text = (await el.text_content() or "").partition("\n")[0].strip() # type: ignore
                     sim = SequenceMatcher(None, text, self.config.name).ratio()
                     log.debug(f"#{misses + 1}: {text!r} ~ {self.config.name!r} → {sim:.2f}")
-
                     if sim >= sim_threshold:
+                        rnd = random.sample([i for i in range(total) if i != misses],
+                                            k=min(random.randint(self.config.min_competitor_view, self.config.max_competitor_view), max(0, total - 1)))
+                        for idx in rnd:
+                            waiter = self.page.context.wait_for_event("page")
+                            await self.click(loc.nth(idx))
+                            await (await waiter).wait_for_load_state("domcontentloaded",
+                                                                     timeout=self.config.timeout)
                         waiter = self.page.context.wait_for_event("page")
                         await self.click(el)
                         new_page = await waiter
-                        await new_page.wait_for_load_state("domcontentloaded", timeout=self.config.timeout)
+                        await new_page.wait_for_load_state("domcontentloaded",
+                                                           timeout=self.config.timeout)
                         self.update_page(new_page)
                         log.info(f"'{self.config.name}' найден и открыт")
                         return True, f"Исполнитель найден на позиции {misses + 1}"
-
                     misses += 1
                 else:
                     log.debug(f"просмотрено {misses} карточек, скроллю ниже…")
                     await self.page.mouse.wheel(0, 1200)
                     await self.page.wait_for_timeout(500)
-
             log.error(f"'{self.config.name}' не найден (проверено {misses} карточек)")
             return False, "Исполнитель не найден"
         except Exception as e:
