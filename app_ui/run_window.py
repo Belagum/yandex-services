@@ -92,12 +92,12 @@ class RunWindow(tk.Toplevel):
                  f"'infinity': {self.var_infinity.get()}, 'autorun': {auto}, 'time': '{tstr}'}}")
         self.destroy()
 
-        def _once(next_ts: float | None):
+        def _once():
             Runner(sel, self.var_headless.get(), self.var_threads.get(),
-                   self.var_position.get(), self.var_infinity.get(), next_ts).run()
+                   self.var_position.get(), self.var_infinity.get()).run()
 
         if not auto:
-            threading.Thread(target=lambda: _once(None), daemon=True).start(); return
+            threading.Thread(target=lambda: _once(), daemon=True).start(); return
 
         def _scheduler():
             class _Dummy:
