@@ -12,5 +12,5 @@ PROXIES_FILE  = str(BASE_DIR / "proxies.json")
 COOKIES_DIR   = str(BASE_DIR / "cookies")
 
 API_URL = "http://yandextopbot.ru"
-version = "v1"
+version = "v1.1"
 current_runner = None
