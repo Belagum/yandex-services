@@ -68,11 +68,11 @@ class CardSettingsWindow(tk.Toplevel):
             .grid(row=row, column=0, columnspan=2, sticky="ew", padx=10, pady=10)
         row += 1
 
-        self.cookies_path = Path(COOKIES_DIR) / f"{card_name}_cookies.json"
-        self.btn_cookies = tk.Button(self,
-                                     text="Отвязать куки" if self.cookies_path.exists() else "Привязать куки",
-                                     command=self._toggle_cookies)
-        self.btn_cookies.grid(row=row, column=0, columnspan=2, sticky="ew", padx=10, pady=4)
+        # self.cookies_path = Path(COOKIES_DIR) / f"{card_name}_cookies.json"
+        # self.btn_cookies = tk.Button(self,
+        #                              text="Отвязать куки" if self.cookies_path.exists() else "Привязать куки",
+        #                              command=self._toggle_cookies)
+        # self.btn_cookies.grid(row=row, column=0, columnspan=2, sticky="ew", padx=10, pady=4)
 
         self.update_idletasks()
         self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())

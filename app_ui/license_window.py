@@ -1,5 +1,7 @@
 import logging
 import tkinter as tk
+
+from app_ui import on_close
 from app_utils.storage import JsonStore
 from app_utils.subscription import SubscriptionChecker
 from app_utils.utils import SETTINGS_FILE
@@ -23,6 +25,7 @@ class LicenseWindow(tk.Toplevel):
         self.var_key = tk.StringVar(value=self.store.load().get("license_key", ""))
         tk.Entry(frame, textvariable=self.var_key).pack(fill="x", padx=10)
         tk.Button(self, text="Сохранить", command=self._save).pack(side="bottom", fill="x", padx=10, pady=10)
+        self.protocol("WM_DELETE_WINDOW", on_close)
         self._validate()
 
     def _validate(self):

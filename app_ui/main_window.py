@@ -1,8 +1,7 @@
 import logging
-import sys
 import tkinter as tk
-from tkinter import messagebox
 
+from app_ui import on_close
 from app_ui.captcha_window import CaptchaSettingsWindow
 from app_ui.cards_window import CardsManagerWindow
 from app_ui.monitoring_window import MonitoringWindow
@@ -22,15 +21,10 @@ class MainWindow(tk.Toplevel):
         log.info(f"MainWindow открыто, статус подписки: {status}, до {end}")
         self.title("Яндекс услуги")
         self.geometry("300x200")
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.protocol("WM_DELETE_WINDOW", on_close)
         self._build_status(status, end)
         self._build_buttons()
         self._build_version()
-
-    @staticmethod
-    def _on_close():
-        if messagebox.askyesno("Выход", "Точно закрыть программу?"):
-            sys.exit(0)
 
     def _build_status(self, status_text: str, end_text: str):
         tk.Label(self, text=f"Подписка: {status_text} до {end_text}")\
@@ -67,7 +61,6 @@ class MainWindow(tk.Toplevel):
     def _open_captcha(self):
         log.info("Открыто окно решения капчи")
         CaptchaSettingsWindow(self)
-
 
     def _build_version(self):
         tk.Label(self, text=version).pack(side='bottom', fill='x', pady=5)
