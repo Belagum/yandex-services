@@ -74,7 +74,8 @@ class Runner:
                 city=cfg.city,
                 time_in_card=cfg.time_in_card,
                 click_phone=cfg.click_phone,
-                keyword=f"{kw} {cfg.city} Яндекс услуги"
+                keyword=f"{kw} {cfg.city} Яндекс услуги",
+                position=self.position
             ))
 
             # поиск
@@ -90,7 +91,7 @@ class Runner:
                 return False
 
             # поиск исоплнителя
-            ok, msg = await svc.find_executor(position=self.position)
+            ok, msg = await svc.find_executor()
             log.debug(msg)
             if self.position:
                 self._positions[kw] = msg

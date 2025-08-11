@@ -19,6 +19,7 @@ class YandexServicesCfg:
     time_in_card: int = 45
     click_phone: bool = False
     keyword: str = ""
+    position: bool = False
 
     url: str = 'https://ya.ru/'
     timeout: int = 30000
@@ -29,9 +30,12 @@ class YandexServicesCfg:
     link_selector_tpl: str = "a[href*='{fragment}']"
     services_search_input: str = 'input.Textinput-Control[name="text"][placeholder="Чем вам помочь?"]'
     services_name_executor_a: str = 'a.Link.WorkerCard-Title'
+    services_next_page: str = 'a[rel="next"][aria-label="Следующая страница"]'
+    executor_max_checks: int = 50
+    executor_similarity_threshold: float = 0.85
+    executor_wait_before_next_page: float = 1.3
     min_competitor_view: int = 1
     max_competitor_view: int = 5
-    search_btn: str = 'a[aria-label=Мессенджер]'
     photo_a: str  = 'a.Link.PhotoGallery-Image'
     next_photo_btn: str = 'div.MediaViewer-ButtonNext'
     close_photo_btn: str = 'div.PhotoViewer-HeaderClose'
@@ -66,11 +70,13 @@ class YandexServicesCfg:
     min_view_video: int = 1
     max_view_video: int = 3
 
-
     popups: list[str] = field(default_factory=lambda: [
-        'button.Distribution-ButtonClose',
-        'button.Distribution-ButtonClose[title="Нет, спасибо"]'
+        '.Distribution-SplashScreenModal .Distribution-ButtonClose',
+        '.Distribution-SplashScreenModal button[title="Нет, спасибо"]',
+        '.SplashscreenSystem_cross .Distribution-ButtonClose',
+        '.SplashscreenSystem_cross button[title="Нет, спасибо"]'
     ])
+
 
 class YandexService(BaseHelper, RandomActionsMixin):
     def __init__(self, page: Page, config: YandexServicesCfg):
@@ -115,10 +121,22 @@ class YandexService(BaseHelper, RandomActionsMixin):
         log.debug(f"Переключено на новую страницу → {new_page.url}")
 
     async def close_popups(self):
-        for popup_selector in self.config.popups:
-            if await self.is_present(popup_selector, timeout=500):
-                await self.click(popup_selector)
-                log.debug(f"Closed popup → '{popup_selector}'")
+        for sel in self.config.popups:
+            if not await self.is_present(sel, timeout=500):
+                continue
+            try:
+                await self.click(sel)
+                log.debug(f"Closed popup → '{sel}'")
+                return
+            except Exception as e:
+                log.warning(f"Ошибка при закрытии popup: {e}")
+                try:
+                    await self.page.keyboard.press('Escape')
+                    if not await self.is_present(sel, timeout=500):
+                        log.debug(f"Closed popup via Escape → '{sel}'")
+                        return
+                except Exception as esc_err:
+                    log.warning(f"Ошибка нажатии esc: {esc_err}")
 
     async def open_page(self) -> None:
         await self.page.goto(self.config.url, timeout=self.config.timeout, wait_until='domcontentloaded')
@@ -177,41 +195,50 @@ class YandexService(BaseHelper, RandomActionsMixin):
             log.exception(f"Ошибка в verify_city:")
             return False, f"Ошибка в проверке города: {e}"
 
-    async def find_executor(self, *, max_miss: int = 10, sim_threshold: float = .85, position: bool = False) -> tuple[bool, str]:
+    async def find_executor(self) -> tuple[bool, str]:
         try:
             log.debug(f"Поиск исполнителя: '{self.config.name}'")
             loc = self.page.locator(self.config.services_name_executor_a)
             initial = set(self.page.context.pages)
-            misses, total_clicked = 0, 0
+            total_viewed = 0
+            idx_on_page = 0
+            total_clicked = 0
 
-            while misses < max_miss:
+            while total_viewed < self.config.executor_max_checks:
                 total = await loc.count()
-                if misses >= total:
-                    log.debug(f"Просмотрено {misses} карточек, скроллю вниз")
-                    await self.page.mouse.wheel(0, 1200)
-                    await self.page.wait_for_timeout(500)
+
+                # если дошли до конца страницы листаем
+                if idx_on_page >= total:
+                    log.debug(f"Просмотрено {idx_on_page} карточек на странице, листаю дальше")
+                    await self.click(self.config.services_next_page)
+                    await self.page.wait_for_load_state("domcontentloaded", timeout=self.config.timeout)
+                    await self.page.wait_for_timeout(self.config.executor_wait_before_next_page * 1000)
+                    loc = self.page.locator(self.config.services_name_executor_a)
+                    idx_on_page = 0
                     continue
 
-                el = loc.nth(misses)
+                el = loc.nth(idx_on_page)
                 text = (await el.text_content() or "").partition("\n")[0].strip()
                 sim = SequenceMatcher(None, text, self.config.name).ratio()
-                log.debug(f"#{misses + 1}: '{text}' ~ '{self.config.name}' → {sim:.2f}")
+                log.debug(f"#{total_viewed + 1}: '{text}' ~ '{self.config.name}' → {sim:.2f}")
 
-                if sim < sim_threshold:
-                    misses += 1
+                if sim < self.config.executor_similarity_threshold:
+                    idx_on_page += 1
+                    total_viewed += 1
+
                     continue
 
-                if position:
-                    log.info(f"Исполнитель найден на позиции {misses + 1} (режим сбора позиций)")
-                    return True, f"{misses + 1}"
+                if self.config.position:
+                    log.info(f"Исполнитель найден на позиции {total_viewed + 1} (режим сбора позиций)")
+                    return True, f"{total_viewed + 1}"
 
                 competitors_cnt = min(
                     random.randint(self.config.min_competitor_view, self.config.max_competitor_view),
                     max(0, total - 1)
                 )
-                rnd = random.sample([i for i in range(total) if i != misses], k=competitors_cnt)
+                rnd = random.sample([i for i in range(total) if i != idx_on_page], k=competitors_cnt)
 
-                for idx in rnd: # клик на конкурентов
+                for idx in rnd:
                     waiter = self.page.context.wait_for_event("page")
                     log.debug(f"Открываю конкурента idx={idx}")
                     await self.click(loc.nth(idx))
@@ -219,8 +246,8 @@ class YandexService(BaseHelper, RandomActionsMixin):
                     await page.wait_for_load_state("domcontentloaded", timeout=self.config.timeout)
                     total_clicked += 1
 
-                waiter = self.page.context.wait_for_event("page") # нужный исполнитель
-                log.info(f"Кликаю исполнителя idx={misses}")
+                waiter = self.page.context.wait_for_event("page")
+                log.info(f"Кликаю исполнителя idx={idx_on_page}")
                 await self.click(el)
                 target_page = await waiter
                 await target_page.wait_for_load_state("domcontentloaded", timeout=self.config.timeout)
@@ -231,10 +258,10 @@ class YandexService(BaseHelper, RandomActionsMixin):
                         log.debug(f"Закрываю вкладку конкурента {p.url}")
                         await p.close()
 
-                log.info(f"Исполнитель найден на позиции {misses + 1}, открыто {total_clicked} конкурентов")
-                return True, f"Исполнитель найден на позиции {misses + 1}"
+                log.info(f"Исполнитель найден после просмотра {total_viewed + 1}, открыто {total_clicked} конкурентов")
+                return True, f"Исполнитель найден на позиции {total_viewed + 1}"
 
-            log.warning(f"Исполнитель не найден после просмотра {misses} карточек")
+            log.warning(f"Исполнитель не найден после просмотра {total_viewed} карточек")
             return False, "Исполнитель не найден"
         except Exception as e:
             log.exception("Ошибка в find_executor:")
